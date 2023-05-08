@@ -1,7 +1,10 @@
-import { createRouter, createWebHashHistory, RouterOptions, Router, RouteRecordRaw } from 'vue-router'
+import {createRouter, createWebHashHistory, RouterOptions, Router, RouteRecordRaw} from 'vue-router'
 
 const routes: RouteRecordRaw[] = [
-    { path: '/', name: 'Home', component: () => import('@/views/Home.vue') },
+
+    {path: '/', name: 'Home', component: () => import("../views/Home.vue")},
+    {path: "/Subtitle", name: 'Subtitle', component: () => import("../views/Subtitle.vue")},
+    {path: "/Download", name: 'Download', component: () => import("../views/Download.vue")}
 ]
 
 // RouterOptions是路由选项类型
