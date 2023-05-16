@@ -12,9 +12,9 @@
         </template>
         <template #default>
             <n-space vertical :wrap-item="false">
-                <n-collapse :default-expanded-names="['基本信息']">
+                <n-collapse :default-expanded-names="['基本信息']" accordion>
                     <n-collapse-item title="基本信息" name="基本信息">
-                        <n-space :wrap="false" :wrap-item="false" justify="space-between">
+                        <n-space :wrap="true" :wrap-item="false" justify="space-between">
                             <n-input-group>
                                 <n-input-group-label>
                                     视频文件
@@ -29,7 +29,6 @@
                                 </n-button>
                             </n-input-group>
                             <n-collapse-transition :show="!this.config_video_only">
-
                                 <n-input-group>
                                     <n-input-group-label>
                                         数据文件
@@ -63,38 +62,48 @@
                     </n-collapse-item>
                     <n-collapse-item title="高级选项">
                         <n-space :wrap-item="false" justify="space-between">
-                            <n-statistic label="覆盖生成">
-                                <template #default>
-                                    <n-switch v-model:value="this.config_overwrite" rubber-band/>
-                                </template>
-                            </n-statistic>
-
-                            <n-statistic label="仅使用视频">
-                                <template #default>
-                                    <n-switch v-model:value="this.config_video_only" rubber-band/>
-                                </template>
-                            </n-statistic>
-                            <n-statistic label="自定义字体">
+                            <n-input-group style="width: min-content;">
+                                <n-input-group-label>
+                                    覆盖现存文件
+                                </n-input-group-label>
+                                <n-radio-group v-model:value="this.config_overwrite">
+                                    <n-radio-button label="是" :value="true"/>
+                                    <n-radio-button label="否" :value="false"/>
+                                </n-radio-group>
+                            </n-input-group>
+                            <n-input-group style="width: min-content;">
+                                <n-input-group-label>
+                                    仅使用视频
+                                </n-input-group-label>
+                                <n-radio-group v-model:value="this.config_video_only">
+                                    <n-radio-button label="是" :value="true"/>
+                                    <n-radio-button label="否" :value="false"/>
+                                </n-radio-group>
+                            </n-input-group>
+                            <n-input-group style="width: min-content;">
+                                <n-input-group-label>自定义字体</n-input-group-label>
                                 <n-select
                                         style="width: 150px;" filterable clear-filter-after-select
                                         v-model:value="this.config_font" :options="this.systemFontsOptions"
-                                ></n-select>
-                            </n-statistic>
-                            <n-statistic label="打字机特效间隔">
-                                <n-space :wrap-item="false">
-                                    <n-input-number
-                                            style="width: 100px;"
-                                            v-model:value="this.config_type_interval_1"
-                                            :min="0" :max="this.config_type_interval_2"
-                                    />
-                                    <n-input-number
-                                            style="width: 100px;"
-                                            v-model:value="this.config_type_interval_2"
-                                            :min="this.config_type_interval_1" :max="200"
-                                    />
-                                </n-space>
-                            </n-statistic>
-
+                                />
+                            </n-input-group>
+                            <n-input-group style="width: max-content;">
+                                <n-input-group-label>打字机特效间隔</n-input-group-label>
+                                <n-input-number
+                                        style="width: 100px;"
+                                        v-model:value="this.config_type_interval_1"
+                                        :min="0" :max="this.config_type_interval_2"
+                                >
+                                    <template #suffix>ms</template>
+                                </n-input-number>
+                                <n-input-number
+                                        style="width: 100px;"
+                                        v-model:value="this.config_type_interval_2"
+                                        :min="this.config_type_interval_1" :max="200"
+                                >
+                                    <template #suffix>ms</template>
+                                </n-input-number>
+                            </n-input-group>
                         </n-space>
                         <n-space :wrap-item="false" v-if="this.video_frame_count">
                             <n-statistic style="width: 100%" label="视频处理区间">
@@ -312,7 +321,7 @@
         </template>
     </n-card>
 </template>
-<script>
+<script lang="ts">
 import {defineComponent} from "vue";
 import {ipcRenderer} from 'electron';
 import {systemFonts} from "../utils/common";
@@ -320,11 +329,10 @@ import fs from "fs";
 
 export default defineComponent({
     setup() {
-        let systemFontsOptions = [];
+        let systemFontsOptions: Object[] = [];
         systemFonts.forEach((font) => {
             systemFontsOptions.push({label: font, value: font});
         })
-
         return {
             systemFontsOptions,
             dialog_staff_position: [
@@ -336,13 +344,13 @@ export default defineComponent({
             railStyle: ({focused, checked}) => {
                 const style = {};
                 if (!checked) {
-                    style.background = "#aaaaaa";
+                    style['background'] = "#aaaaaa";
                     if (focused)
-                        style.boxShadow = "0 0 0 2px #aaaaaa40";
+                        style['boxShadow'] = "0 0 0 2px #aaaaaa40";
                 } else {
-                    style.background = "#2080f0";
+                    style['background'] = "#2080f0";
                     if (focused)
-                        style.boxShadow = "0 0 0 2px #2080f040";
+                        style['boxShadow'] = "0 0 0 2px #2080f040";
                 }
                 return style;
             }
@@ -433,7 +441,7 @@ export default defineComponent({
                     this.alert = false
                 }, 5000)
             } else {
-                let duration = [Math.min(...this.config_duration), Math.max(...this.config_duration)]
+                let duration: number[] | null = [Math.min(...this.config_duration), Math.max(...this.config_duration)]
                 if (JSON.stringify(duration) === JSON.stringify([0, this.video_info['frameCount']]))
                     duration = null
                 else if (JSON.stringify(duration) === JSON.stringify([0, 0]))
@@ -451,7 +459,7 @@ export default defineComponent({
                     duration: duration,
                     debug: false,
                 }
-                this.axios.post('http://localhost:50000/new', ProcessConfig).then().catch((e) => {
+                this.axios.post('http://localhost:50000/subtitle/new', ProcessConfig).then().catch((e) => {
                     console.log(e)
                 })
                 this.modalClose()
@@ -460,7 +468,7 @@ export default defineComponent({
         getVideoInfo() {
             this.video_info = {}
             this.video_frame_count = 0
-            this.axios.get(`http://localhost:50000/videoInfo?video_file=${this.config_video_file}`).then((data) => {
+            this.axios.get(`http://localhost:50000/subtitle/videoInfo?video_file=${this.config_video_file}`).then((data) => {
                 this.video_info = data.data.data
                 this.video_frame_count = this.video_info['frameCount']
                 this.config_duration = [0, this.video_frame_count]
@@ -470,9 +478,9 @@ export default defineComponent({
             this.modalActiveControl();
         },
         formatTooltip(value) {
-            const time = parseInt(value / this.video_info['videoFps'])
+            const time = parseInt((value / this.video_info['videoFps']).toString())
             let seconds = `00${time % 60}`.split('').slice(-2).join('');
-            let minutes = `00${parseInt(time / 60)}`.split('').slice(-2).join('');
+            let minutes = `00${parseInt((time / 60).toString())}`.split('').slice(-2).join('');
             return `${minutes}:${seconds}`
         },
         makeStaffItem() {
@@ -534,7 +542,7 @@ export default defineComponent({
             this.config_staff.push(item)
             this.restoreStaffItem()
         },
-        clearStaffItem(item) {
+        clearStaffItem() {
             this.config_staff = []
         },
         saveStaffTemplate() {
@@ -554,6 +562,12 @@ export default defineComponent({
                 }
             })
         }
+    },
+    unmounted() {
+        ipcRenderer.removeAllListeners('selected-video')
+        ipcRenderer.removeAllListeners('selected-json')
+        ipcRenderer.removeAllListeners('selected-translate')
+        ipcRenderer.removeAllListeners('read-file-json-result')
     }
 
 })

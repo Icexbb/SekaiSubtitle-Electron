@@ -1,5 +1,5 @@
 <template>
-    <n-layout has-sider class="app">
+    <n-layout has-sider class="app full-height">
         <n-layout-sider
                 bordered
                 collapse-mode="width"
@@ -22,11 +22,11 @@
         </n-layout-content>
     </n-layout>
 </template>
-<script>
+<script lang="ts">
 import {defineComponent, h, ref} from "vue";
-import {NIcon, useMessage} from "naive-ui";
+import {NIcon} from "naive-ui";
 import {RouterLink} from "vue-router";
-import {HomeRound, SubtitlesRound, DownloadRound} from "@vicons/material"
+import {HomeRound, SubtitlesRound, DownloadRound, SettingsRound, TranslateRound} from "@vicons/material"
 
 function renderIcon(icon) {
     return () => h(NIcon, null, {default: () => h(icon)});
@@ -40,6 +40,7 @@ const menuOptions = [
         key: "Home",
         icon: renderIcon(HomeRound)
     },
+    {key: 'divider-1', type: 'divider'},
     {
         label: () => h(
             RouterLink, {to: {name: "Subtitle"}}, {default: () => "自动轴机"}
@@ -53,23 +54,23 @@ const menuOptions = [
         ),
         key: "Download",
         icon: renderIcon(DownloadRound)
+    }, {
+        label: () => h(
+            RouterLink, {to: {name: "Translate"}}, {default: () => "剧情翻译"}
+        ),
+        key: "Translate",
+        disabled: true,
+        icon: renderIcon(TranslateRound)
     },
-    // {
-    //     label: () => h(
-    //         RouterLink,
-    //         {to: {name: "Download",}},
-    //         {default: () => "首页"}
-    //     ),
-    //     key: "Download",
-    // },
-    // {
-    //     label: () => h(
-    //         RouterLink,
-    //         {to: {name: "Translate",}},
-    //         {default: () => "首页"}
-    //     ),
-    //     key: "Translate",
-    // },
+    {key: 'divider-2', type: 'divider'},
+    {
+        label: () => h(
+            RouterLink, {to: {name: "Setting"}}, {default: () => "设置"}
+        ),
+        key: "Setting",
+        disabled: true,
+        icon: renderIcon(SettingsRound)
+    },
 ]
 export default defineComponent({
     setup() {
@@ -81,8 +82,5 @@ export default defineComponent({
 })
 </script>
 <style>
-.app {
-    height: 100%;
 
-}
 </style>

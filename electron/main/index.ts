@@ -1,4 +1,4 @@
-import {app, BrowserWindow, shell, ipcMain} from 'electron'
+import {app, BrowserWindow, shell, ipcMain, dialog} from 'electron'
 import {release} from 'node:os'
 import {join} from 'node:path'
 import path from 'path';
@@ -20,13 +20,20 @@ process.env.DIST = join(process.env.DIST_ELECTRON, '../dist')
 process.env.PUBLIC = process.env.VITE_DEV_SERVER_URL
     ? join(process.env.DIST_ELECTRON, '../public')
     : process.env.DIST
+
+const USER_HOME = process.env.HOME || process.env.USERPROFILE
+const PROGRAM_DIR = process.platform === 'win32'
+    ? path.join(USER_HOME, 'Documents', 'SekaiSubtitle')
+    : path.join(USER_HOME, 'SekaiSubtitle')
+
 const EXTRA_RESOURCES_PATH = app.isPackaged
-    ? path.join(process.resourcesPath, 'extraResources')
+    ? path.join(process.resourcesPath, 'resources')
     : path.join(__dirname, '../../extra');
 const getExtraResourcesPath = (...paths: string[]): string => {
     return path.join(EXTRA_RESOURCES_PATH, ...paths);
 };
-
+const backendBin: string = getExtraResourcesPath(process.platform === 'win32' ? 'core.exe' : 'core.bin');
+let backendCP: cp.ChildProcess = null;
 // Disable GPU Acceleration for Windows 7
 if (release().startsWith('6.1')) app.disableHardwareAcceleration()
 
@@ -48,6 +55,8 @@ let win: BrowserWindow | null = null
 const preload = join(__dirname, '../preload/index.js')
 const url = process.env.VITE_DEV_SERVER_URL
 const indexHtml = join(process.env.DIST, 'index.html')
+let running = true;
+
 
 async function createWindow() {
     win = new BrowserWindow({
@@ -81,14 +90,33 @@ async function createWindow() {
         if (url.startsWith('https:')) shell.openExternal(url)
         return {action: 'deny'}
     })
-    // win.webContents.on('will-navigate', (event, url) => { }) #344
+    win.webContents.on('will-navigate', (event, url) => {
+    }) // #344
+
+    fs.stat(backendBin, (err) => {
+        if (err) {
+            console.log(err)
+        } else {
+            backendCP = cp.execFile(backendBin, (error, stdout, stderr) => {
+                if (running) {
+                    if (error)
+                        console.log('Error:', error);
+                    if (stdout)
+                        console.log("Stdout:", stdout);
+                    if (stderr)
+                        console.log("Stderr", stderr);
+                }
+            })
+        }
+    })
 }
 
 app.whenReady().then(createWindow)
-
 app.on('window-all-closed', () => {
+    running = false
     win = null
-    if (process.platform !== 'darwin') app.quit()
+    backendCP.kill();
+    app.quit();
 })
 
 app.on('second-instance', () => {
@@ -128,7 +156,6 @@ ipcMain.handle('open-win', (_, arg) => {
     }
 })
 
-import {dialog} from 'electron'
 
 ipcMain.on('select-file-exist-video', function (event) {
     dialog.showOpenDialog({
@@ -203,3 +230,38 @@ ipcMain.on('save-file-json', function (event, args) {
         }
     })
 });
+
+ipcMain.on('save-setting', (event, args) => {
+    if (!fs.existsSync(PROGRAM_DIR)) {
+        fs.mkdir(PROGRAM_DIR, (err) => {
+            if (err) console.log(err)
+        })
+    }
+    if (fs.existsSync(PROGRAM_DIR)) {
+        fs.writeFile(path.join(PROGRAM_DIR, 'setting.json'), JSON.stringify(args), err => {
+            if (err) {
+                console.log(err);
+                alert(`设置文件保存失败:${err}`)
+            }
+        })
+    } else {
+        alert(`配置文件夹创建失败！`)
+    }
+})
+
+ipcMain.on('get-setting', (event, args) => {
+    const setting = fs.existsSync(path.join(PROGRAM_DIR, 'setting.json'))
+        ? JSON.parse(fs.readFileSync(path.join(PROGRAM_DIR, 'setting.json')).toString())
+        : {}
+    if ((typeof args) === 'string') {
+        event.sender.send('get-setting-result', setting[args])
+    } else if ((typeof args) === 'object') {
+        let result = {}
+        Object.keys(args).forEach((value) => {
+            result[value] = setting[value]
+        })
+        event.sender.send('get-setting-result', result)
+    } else {
+        event.sender.send('get-setting-result', setting)
+    }
+})

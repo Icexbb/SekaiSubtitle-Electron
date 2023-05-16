@@ -54,7 +54,7 @@
     </n-card>
 </template>
 
-<script>
+<script lang="ts">
 import {defineComponent} from "vue";
 
 export default defineComponent({
@@ -62,7 +62,7 @@ export default defineComponent({
     data() {
         return {
             webSocket: null,
-            url: `ws://localhost:50000/status/${this.task_id}`,
+            url: `ws://localhost:50000/subtitle/status/${this.task_id}`,
             taskLogs: [],
             taskLogCount: 0,
             currentProgress: 0,
@@ -75,7 +75,7 @@ export default defineComponent({
     },
     methods: {
         initConfig() {
-            this.axios.get(`http://localhost:50000/taskConfig/${this.task_id}`).then(
+            this.axios.get(`http://localhost:50000/subtitle/taskConfig/${this.task_id}`).then(
                 data => {
                     this.taskConfig = data.data['data']
                     const filename = this.taskConfig['video_file'].replaceAll('\\', "/")
@@ -128,7 +128,7 @@ export default defineComponent({
             console.log(res);
         },
         taskControl(operate) {
-            this.axios.post(`http://localhost:50000/${operate}/${this.task_id}`)
+            this.axios.post(`http://localhost:50000/subtitle/${operate}/${this.task_id}`)
         },
         taskReload() {
             this.taskLogs = []

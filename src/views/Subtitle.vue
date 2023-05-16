@@ -63,7 +63,7 @@
     </n-modal>
 </template>
 
-<script>
+<script lang="ts">
 import {defineComponent, ref} from "vue";
 import SubtitleTask from "../components/SubtitleTask.vue";
 import SubtitleEmit from "../components/SubtitleEmit.vue";
@@ -73,7 +73,7 @@ export default defineComponent({
     data() {
         return {
             webSocket: null,
-            url: 'ws://localhost:50000/tasks',
+            url: 'ws://localhost:50000/subtitle/tasks',
             taskList: ref({}),
             living: ref(true),
             modalActive: false
@@ -124,7 +124,7 @@ export default defineComponent({
             Object.keys(this.taskList).forEach(
                 (key) => {
                     try {
-                        this.axios.post(`http://localhost:50000/${operate}/${key}`)
+                        this.axios.post(`http://localhost:50000/subtitle/${operate}/${key}`)
                     } finally {
                     }
                 }
@@ -159,6 +159,6 @@ export default defineComponent({
     align-items: center;
     justify-content: center;
     text-align: center;
-    margin: 0.5em 2em 0em 2em;
+    margin: 0.5em 2em 0 2em;
 }
 </style>

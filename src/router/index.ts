@@ -4,7 +4,9 @@ const routes: RouteRecordRaw[] = [
 
     {path: '/', name: 'Home', component: () => import("../views/Home.vue")},
     {path: "/Subtitle", name: 'Subtitle', component: () => import("../views/Subtitle.vue")},
-    {path: "/Download", name: 'Download', component: () => import("../views/Download.vue")}
+    {path: "/Download", name: 'Download', component: () => import("../views/Download.vue")},
+    {path: "/Setting", name: 'Setting', component: () => import("../views/Setting.vue")},
+    {path: "/Translate", name: 'Translate', component: () => import("../views/Translate.vue")}
 ]
 
 // RouterOptions是路由选项类型

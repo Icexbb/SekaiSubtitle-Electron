@@ -13,7 +13,7 @@
                 <n-button @click="()=>{this.$router.push('/subtitle')}">
                     自动轴机
                 </n-button>
-                <n-button @click="()=>{this.$router.push('/download')}" disabled>
+                <n-button @click="()=>{this.$router.push('/download')}">
                     数据下载
                 </n-button>
                 <n-button @click="()=>{this.$router.push('/translate')}" disabled>
@@ -24,7 +24,7 @@
     </div>
 </template>
 
-<script>
+<script lang="ts">
 import {defineComponent} from "vue";
 
 export default defineComponent({
@@ -56,17 +56,5 @@ export default defineComponent({
     align-items: center;
     justify-content: center;
 
-}
-
-.n-row {
-    align-items: center;
-    justify-content: center;
-}
-
-.n-gradient-text {
-    font-size: 48px;
-    font-weight: bold;
-    align-items: center;
-    justify-content: center;
 }
 </style>

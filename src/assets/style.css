@@ -1,4 +1,22 @@
 html body #app{
     height: 100vh;
     width: 100vw;
+    overflow-x: hidden;
+}
+
+.full-height{
+    height: 100vh;
+}
+.full-width{
+    width: 100vw;
+}
+
+.center{
+    text-align-all: center;
+    justify-content: center;
+    justify-items: center;
+    justify-self: center;
+    align-content: center;
+    align-items: center;
+    align-self: center;
 }
