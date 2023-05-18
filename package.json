@@ -1,6 +1,6 @@
 {
   "name": "sekaisubtitle-electron",
-  "version": "0.9.0",
+  "version": "0.9.9-rc.1",
   "main": "dist-electron/main/index.js",
   "description": "",
   "author": "XBB <icexb_baka@163.com>",
@@ -55,29 +55,19 @@
   },
   "build": {
     "appId": "indi.icexbb.sekaisubtitle",
-    "productName": "SekaiSubtitle",
+    "productName": "Sekai Subtitle",
     "directories": {
-      "output": "release/${version}"
+      "output": "release/${version}-${platform}"
     },
     "files": [
-      "src/**",
-      "README.md",
-      "release/**"
+      "dist/**/*",
+      "dist-electron/**/*"
     ],
     "win": {
-      "target": [
-        "nsis"
-      ],
+      "target": "nsis",
       "icon": "public/favicon.ico",
       "artifactName": "${productName}_setup_${version}.${ext}",
       "extraResources": [
-        {
-          "from": "./extra/font-list/**",
-          "to": "../resources/font-list",
-          "filter": [
-            "**/*"
-          ]
-        },
         {
           "from": "./extra/core.exe",
           "to": "../resources/core.exe"
@@ -89,8 +79,10 @@
       "artifactName": "${productName}_setup_${version}.${ext}",
       "target": "dmg",
       "extraResources": [
-        "./extra/font-list/**",
-        "./extra/core.bin"
+        {
+          "from": "./extra/core.bin",
+          "to": "../resources/core.bin"
+        }
       ]
     },
     "nsis": {
