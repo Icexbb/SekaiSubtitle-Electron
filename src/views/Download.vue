@@ -1,5 +1,5 @@
 <template>
-    <n-card style="height: 100%;" content-style="padding: 1em;height:100%;" header-style="padding: 1em;"
+    <n-card style="height: 100%;user-select: none;" content-style="padding: 1em;height:100%;" header-style="padding: 1em;"
             :segmented="false" class="full-height">
         <template #header>
             <n-page-header class="header" title="数据下载"/>

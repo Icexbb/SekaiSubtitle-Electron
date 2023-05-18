@@ -1,16 +1,14 @@
 <template>
-    <n-popover trigger="hover" :disabled="!Boolean(this.status)">
+    <n-popover trigger="hover" :disabled="!Boolean(this.status)" style="user-select: none;">
         <template #trigger>
-            <n-tag round closable
+            <n-tag round closable style="user-select: none;"
                    :type="Boolean(this.status)?'success':this.downloading?'warning':'info'"
                    @close="this.deleteSelf">
                 <template #default>
-                    <n-button :bordered="false" size="small" round strong
-                              style="padding: 0" ghost
-                              :type="Boolean(this.status)?'success':this.downloading?'warning':'info'"
-                              @click="this.showFile">
-                        {{ this.name }}
-                    </n-button>
+                    <span
+                            :draggable="true" @dblclick="this.showFile"
+                            @dragstart="this.dragOut" @dragover.prevent
+                    >{{ this.name }}</span>
                 </template>
                 <template #icon>
                     <n-button :bordered="false" style="padding-inline: 2px" success>
@@ -32,13 +30,14 @@
 <script lang="ts">
 import {defineComponent} from 'vue'
 import {DownloadRound, DownloadDoneRound, DownloadingRound} from "@vicons/material"
+import {ipcRenderer} from "electron";
 
 export default defineComponent({
     name: "DownloadRequest",
     props: {hash: String, status: Boolean},
     components: {DownloadRound, DownloadDoneRound, DownloadingRound},
     mounted() {
-        this.getInfo()
+        this.getInfo();
     },
     data() {
         return {
@@ -72,10 +71,15 @@ export default defineComponent({
             if (Boolean(this.filepath) && this.status) {
                 require('child_process').exec(`explorer.exe /select,${this.filepath}`)
             }
-        }
-
-    }
-
+        },
+        dragOut(event) {
+            event.preventDefault()
+            ipcRenderer.send('drag-start', this.filepath)
+            ipcRenderer.once('drag-finished', () => {
+                this.deleteSelf()
+            })
+        },
+    },
 })
 </script>
 

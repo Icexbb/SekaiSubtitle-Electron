@@ -4,7 +4,6 @@ import vue from '@vitejs/plugin-vue'
 import electron from 'vite-plugin-electron'
 import renderer from 'vite-plugin-electron-renderer'
 import pkg from './package.json'
-import {quasar, transformAssetUrls} from '@quasar/vite-plugin'
 
 // https://vitejs.dev/config/
 export default defineConfig(({command}) => {
@@ -16,9 +15,7 @@ export default defineConfig(({command}) => {
 
     return {
         plugins: [
-            vue({
-                template: {transformAssetUrls}
-            }),
+            vue({}),
             electron([
                 {
                     // Main-Process entry file of the Electron App.
@@ -62,9 +59,6 @@ export default defineConfig(({command}) => {
             ]),
             // Use Node.js API in the Renderer-process
             renderer(),
-            quasar({
-                sassVariables: 'src/quasar-variables.sass'
-            })
         ],
         server: process.env.VSCODE_DEBUG && (() => {
             const url = new URL(pkg.debug.env.VITE_DEV_SERVER_URL)

@@ -1,7 +1,6 @@
 import {createApp} from 'vue'
 import "./assets/style.css"
 import App from './App.vue'
-// import './samples/node-api'
 import axios from "axios";
 import VueAxios from 'vue-axios'
 import router from './router'

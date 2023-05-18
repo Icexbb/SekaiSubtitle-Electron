@@ -1,24 +1,24 @@
 <template>
-    <div class="container">
+    <div class="container" style="user-select:none; ">
         <n-layout class="home">
-            <img class="home-logo" src="../assets/icon.png" alt="Sekai Subtitle">
-            <n-row>
-                <n-gradient-text
-                        :gradient="this.titleGradient">
+            <n-space vertical>
+                <img class="home-logo" src="../assets/icon.png" alt="Sekai Subtitle" disabled>
+                <n-gradient-text disabled
+                        :gradient="this.titleGradient" font-size="32">
                     Sekai Subtitle
                 </n-gradient-text>
-            </n-row>
-            <n-divider/>
-            <n-space justify="center">
-                <n-button @click="()=>{this.$router.push('/subtitle')}">
-                    自动轴机
-                </n-button>
-                <n-button @click="()=>{this.$router.push('/download')}">
-                    数据下载
-                </n-button>
-                <n-button @click="()=>{this.$router.push('/translate')}" disabled>
-                    文档翻译
-                </n-button>
+                <n-divider/>
+                <n-space justify="center">
+                    <n-button @click="()=>{this.$router.push('/subtitle')}">
+                        自动轴机
+                    </n-button>
+                    <n-button @click="()=>{this.$router.push('/download')}">
+                        数据下载
+                    </n-button>
+                    <n-button @click="()=>{this.$router.push('/translate')}" disabled>
+                        文档翻译
+                    </n-button>
+                </n-space>
             </n-space>
         </n-layout>
     </div>

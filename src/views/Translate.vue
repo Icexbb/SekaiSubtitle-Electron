@@ -7,7 +7,11 @@ export default defineComponent({
 </script>
 
 <template>
-
+    <n-scrollbar>
+        <n-space vertical align="center">
+            <n-empty class="full-height"></n-empty>
+        </n-space>
+    </n-scrollbar>
 </template>
 
 <style scoped>

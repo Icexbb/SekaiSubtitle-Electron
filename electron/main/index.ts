@@ -1,4 +1,4 @@
-import {app, BrowserWindow, shell, ipcMain, dialog} from 'electron'
+import {app, BrowserWindow, shell, ipcMain, dialog, Notification} from 'electron'
 import {release} from 'node:os'
 import {join} from 'node:path'
 import path from 'path';
@@ -27,7 +27,7 @@ const PROGRAM_DIR = process.platform === 'win32'
     : path.join(USER_HOME, 'SekaiSubtitle')
 
 const EXTRA_RESOURCES_PATH = app.isPackaged
-    ? path.join(process.resourcesPath, 'resources')
+    ? path.join(process.resourcesPath)
     : path.join(__dirname, '../../extra');
 const getExtraResourcesPath = (...paths: string[]): string => {
     return path.join(EXTRA_RESOURCES_PATH, ...paths);
@@ -69,8 +69,14 @@ async function createWindow() {
             // Read more on https://www.electronjs.org/docs/latest/tutorial/context-isolation
             nodeIntegration: true,
             contextIsolation: false,
+            sandbox: false
         },
+        // frame: false,
+        // titleBarStyle: 'hidden'
+
     })
+    win.setMenuBarVisibility(false)
+
 
     if (process.env.VITE_DEV_SERVER_URL) { // electron-vite-vue#298
         win.loadURL(url)
@@ -97,16 +103,21 @@ async function createWindow() {
         if (err) {
             console.log(err)
         } else {
-            backendCP = cp.execFile(backendBin, (error, stdout, stderr) => {
-                if (running) {
-                    if (error)
-                        console.log('Error:', error);
-                    if (stdout)
-                        console.log("Stdout:", stdout);
-                    if (stderr)
-                        console.log("Stderr", stderr);
-                }
-            })
+            try {
+                backendCP = cp.execFile(backendBin, (error, stdout, stderr) => {
+                    if (running) {
+                        if (error)
+                            console.log('Error:', error);
+                        if (stdout)
+                            console.log("Stdout:", stdout);
+                        if (stderr)
+                            console.log("Stderr", stderr);
+                    }
+                })
+            } catch (e) {
+                alert(e)
+                app.quit()
+            }
         }
     })
 }
@@ -115,8 +126,11 @@ app.whenReady().then(createWindow)
 app.on('window-all-closed', () => {
     running = false
     win = null
-    backendCP.kill();
-    app.quit();
+    try {
+        backendCP.kill();
+    } finally {
+        app.quit();
+    }
 })
 
 app.on('second-instance', () => {
@@ -198,13 +212,11 @@ ipcMain.on('select-file-save-subtitle', function (event) {
 });
 
 ipcMain.on('get-system-font', function (event) {
-    const script = getExtraResourcesPath("font-list/getSysFont.js")
-    let fonts: string[] = [];
-    const forked = cp.fork(script);
-    forked.on("message", function (message: string[]) {
-        fonts = message
-        event.sender.send("system-font", fonts)
-    })
+    let fontList = require('font-list')
+    fontList.getFonts()
+        .then(fonts => {
+            event.sender.send("system-font", fonts)
+        })
 });
 
 ipcMain.on('read-file-json', function (event) {
@@ -264,4 +276,26 @@ ipcMain.on('get-setting', (event, args) => {
     } else {
         event.sender.send('get-setting-result', setting)
     }
+})
+
+ipcMain.on('drag-start', (event, filePath) => {
+    event.sender.startDrag({
+        file: filePath,
+        icon: path.join(__dirname, '../../public/DragDrop.png')
+    })
+    event.sender.send('drag-finished')
+})
+
+interface NotificationOption {
+    title: string,
+    body: string
+}
+
+ipcMain.on('notification-show', (event, args: [NotificationOption, string]) => {
+    const notification = new Notification(args[0])
+    notification.on("click", (event) => {
+        shell.showItemInFolder(process.platform === "win32" ? args[1].replace('/', '\\') : args[1])
+        require('child_process').exec(`explorer.exe /select,${args[1]}`)
+    })
+    notification.show()
 })

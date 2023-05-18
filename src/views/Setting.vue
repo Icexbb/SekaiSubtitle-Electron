@@ -39,6 +39,12 @@
                             </n-space>
                         </n-card>
                         <n-card hoverable>
+                            <n-space justify="space-between" style="width: 100%;">
+                                <n-text>允许使用自定义字体</n-text>
+                                <n-switch v-model:value="this.settingSubtitleCustomFontSettable"></n-switch>
+                            </n-space>
+                        </n-card>
+                        <n-card hoverable>
                             <n-space :wrap="false" :wrap-item="false" justify="space-between" style="width: 100%;">
                                 <n-text class="center">
                                     打字机特效时间
@@ -95,6 +101,7 @@ export default defineComponent({
             settingSubtitleAlwaysOverwrite: false,
             settingSubtitleTyperFade: 50,
             settingSubtitleTyperInterval: 80,
+            settingSubtitleCustomFontSettable: false,
         }
     },
     methods: {
@@ -107,7 +114,8 @@ export default defineComponent({
                 SubtitleAlwaysOverwrite: this.settingSubtitleAlwaysOverwrite,
                 SubtitleRunAfterCreate: this.settingSubtitleRunAfterCreate,
                 SubtitleTyperFade: this.settingSubtitleTyperFade,
-                SubtitleTyperInterval: this.settingSubtitleTyperInterval
+                SubtitleTyperInterval: this.settingSubtitleTyperInterval,
+                SubtitleCustomFontSettable: this.settingSubtitleCustomFontSettable
             }
         },
         saveConfig() {
@@ -123,6 +131,7 @@ export default defineComponent({
                 this.settingSubtitleRunAfterCreate = args['SubtitleRunAfterCreate']
                 this.settingSubtitleTyperFade = args['SubtitleTyperFade']
                 this.settingSubtitleTyperInterval = args['SubtitleTyperInterval']
+                this.settingSubtitleCustomFontSettable = args['SubtitleCustomFontSettable']
             })
         }
     },
