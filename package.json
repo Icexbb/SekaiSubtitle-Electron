@@ -59,6 +59,11 @@
     "directories": {
       "output": "release/${version}"
     },
+    "files": [
+      "src/**",
+      "README.md",
+      "release/**"
+    ],
     "win": {
       "target": [
         "nsis"
