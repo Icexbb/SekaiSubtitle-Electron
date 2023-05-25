@@ -3,19 +3,6 @@ import * as fs from 'fs';
 import {ipcRenderer} from "electron";
 import {area_name, chara_name, unit_name} from "./constants";
 
-function sortObjectReverse(unordered: Object) {
-    return Object.keys(unordered).sort((a, b) => {
-        return parseInt(a.substring(0, 3)) - parseInt(b.substring(0, 3))
-    }).reduce(
-        (obj, key) => {
-            obj[key] = unordered[key];
-            return obj;
-        },
-        {}
-    );
-}
-
-
 interface SourceList {
     events: string
     cards: string
