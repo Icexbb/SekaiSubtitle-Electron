@@ -53,8 +53,9 @@ const indexHtml = join(process.env.DIST, 'index.html')
 let running = true;
 const CoreBin: string = getExtraResourcesPath(process.platform === 'win32' ? 'core.exe' : 'core.bin');
 const CoreVersion = cp.execSync(`"${CoreBin}" -v`).toString()
-const AppVersion = require(getExtraResourcesPath(app.isPackaged ? "package.json" : "../package.json")).version;
+const AppVersion = JSON.parse(fs.readFileSync(path.join(__dirname, "../../package.json")).toString()).version;
 let CoreProcess: cp.ChildProcess = null;
+
 let CoreConnected = false;
 let CoreAliveSocket = null;
 
