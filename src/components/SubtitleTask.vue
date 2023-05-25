@@ -40,9 +40,6 @@
                 >
                     {{ this.status === 'idle' ? '开始处理' : '中止任务' }}
                 </n-button>
-                <!--                <n-button secondary strong size="small" type="warning"-->
-                <!--                          @click="()=>{this.taskReload();this.taskControl('restart')}">重新运行-->
-                <!--                </n-button>-->
                 <n-button secondary strong size="small" type="warning"
                           @click="()=>{this.taskReload();this.taskControl('reload')}">重新加载
                 </n-button>
@@ -56,6 +53,7 @@
 
 <script lang="ts">
 import {defineComponent} from "vue";
+import {ipcRenderer} from "electron";
 
 export default defineComponent({
     props: {"task_id": String, "status": String},
@@ -69,6 +67,7 @@ export default defineComponent({
             taskConfig: {},
             taskLogStrings: [],
             taskName: "",
+            taskNoticed: false,
             fps: 0,
             eta: 0
         }
@@ -94,7 +93,6 @@ export default defineComponent({
         webSocketOnOpen() {
             this.webSocket.send(JSON.stringify({"request": this.taskLogCount}));
         },
-        // 获取到后台消息的事件，操作数据的代码在onmessage中书写
         webSocketOnMessage(res) {
             const data = JSON.parse(res.data)
             if (data['type'] === 'log') {
@@ -115,14 +113,16 @@ export default defineComponent({
                         this.taskLogStrings.push(log['data'])
                     }
                 })
+                if (this.currentProgress == 100 && !this.taskNoticed) {
+                    this.messageFinish();
+                }
             }
             this.webSocket.send(JSON.stringify({"request": this.taskLogCount}))
+
         },
-        // 关闭连接
         webSocketOnClose() {
             this.webSocket.close()
         },
-        //连接失败的事件
         webSocketOnError(res) {
             console.log('websocket连接失败');
             console.log(res);
@@ -134,9 +134,22 @@ export default defineComponent({
             this.taskLogs = []
             this.taskLogCount = 0
             this.currentProgress = 0
+            this.taskNoticed = false
             this.taskLogStrings = []
+        },
+        messageFinish() {
+            if (!this.taskNoticed) {
+                const vp: string = this.taskConfig['video_file']
+                let op: string = this.taskConfig['output_path']
+                if (!Boolean(op.length)) {
+                    op = vp.replace(vp.substring(vp.lastIndexOf('.')), ".ass")
+                }
+                ipcRenderer.send('notification-show', [
+                    {title: `任务 ${this.taskName} 完成`, body: `输出到 "${op}"`}, op
+                ])
+                this.taskNoticed = true
+            }
         }
-
     },
     created() {
         // 页面打开就建立连接，根据业务需要
