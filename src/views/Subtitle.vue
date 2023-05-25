@@ -81,31 +81,30 @@ export default defineComponent({
     },
     provide() {
         return {
-            modalActiveControl: ()=>{this.modalActive = false},
+            modalActiveControl: () => {
+                this.modalActive = false
+            },
         };
     },
     methods: {
         initSocket() {
             let url = this.url
             this.webSocket = new WebSocket(url)
-            this.webSocket.onopen = this.webSocketOnOpen
+            this.webSocket.onopen = () => {
+                this.webSocket.send(JSON.stringify({type: "alive"}));
+            };
             this.webSocket.onclose = this.webSocketOnClose
             this.webSocket.onmessage = this.webSocketOnMessage
-            this.webSocket.onerror = this.webSocketOnError
+            this.webSocket.onerror = (err) => {
+                console.log('websocket连接失败', err);
+            };
         },
-        webSocketOnOpen() {
-            // console.log('websocket连接成功');
-            this.webSocket.send(JSON.stringify({type: "alive"}));
-        },
-        // 获取到后台消息的事件，操作数据的代码在onmessage中书写
+
         webSocketOnMessage(res) {
             const data = JSON.parse(res.data)
-            if (data['type'] === 'tasks') {
-                this.taskList = data['data']
-            }
+            if (data['type'] === 'tasks') this.taskList = data['data']
             this.webSocket.send(JSON.stringify({type: "alive"}));
         },
-        // 关闭连接
         webSocketOnClose() {
             if (this.webSocket)
                 this.webSocket.close()
@@ -115,18 +114,10 @@ export default defineComponent({
                 this.taskList = {}
             }
         },
-        webSocketOnError(res) {
-            console.log('websocket连接失败');
-            // 打印失败的数据
-            console.log(res);
-        },
         tasksControl(operate) {
             Object.keys(this.taskList).forEach(
                 (key) => {
-                    try {
-                        this.axios.post(`http://localhost:50000/subtitle/${operate}/${key}`)
-                    } finally {
-                    }
+                    this.axios.post(`http://localhost:50000/subtitle/${operate}/${key}`).then()
                 }
             )
 
@@ -134,14 +125,12 @@ export default defineComponent({
     },
     created() {
         // 页面打开就建立连接，根据业务需要
-        if (!this.webSocket)
-            this.initSocket()
+        if (!this.webSocket) this.initSocket();
     },
     unmounted() {
         this.living = false
         try {
-            if (this.webSocket)
-                this.webSocket.close()
+            if (this.webSocket) this.webSocket.close();
         } finally {
             this.webSocket = null
         }

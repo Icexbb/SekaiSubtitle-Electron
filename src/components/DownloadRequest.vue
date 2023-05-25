@@ -1,8 +1,8 @@
 <template>
-    <n-popover trigger="hover" :disabled="!Boolean(this.status)" style="user-select: none;">
+    <n-popover trigger="hover" :disabled="!Boolean(this.downloaded)" style="user-select: none;">
         <template #trigger>
             <n-tag round closable style="user-select: none;"
-                   :type="Boolean(this.status)?'success':this.downloading?'warning':'info'"
+                   :type="Boolean(this.downloaded)?'success':this.downloading?'warning':'info'"
                    @close="this.deleteSelf">
                 <template #default>
                     <span
@@ -13,9 +13,9 @@
                 <template #icon>
                     <n-button :bordered="false" style="padding-inline: 2px" success>
                         <n-icon @click="this.download">
-                            <DownloadRound v-if="!Boolean(this.status)&&!Boolean(this.downloading)"/>
-                            <DownloadingRound v-if="!Boolean(this.status)&&Boolean(this.downloading)"/>
-                            <DownloadDoneRound v-if="Boolean(this.status)"/>
+                            <DownloadRound v-if="(!this.downloaded)&&(!this.downloading)"/>
+                            <DownloadingRound v-if="(!this.downloaded)&&this.downloading"/>
+                            <DownloadDoneRound v-if="this.downloaded"/>
                         </n-icon>
                     </n-button>
                 </template>
@@ -31,40 +31,63 @@
 import {defineComponent} from 'vue'
 import {DownloadRound, DownloadDoneRound, DownloadingRound} from "@vicons/material"
 import {ipcRenderer} from "electron";
+import {useDownloadTasksStore} from "../stores/DownloadTasks";
+import fs from "fs";
 
 export default defineComponent({
     name: "DownloadRequest",
-    props: {hash: String, status: Boolean},
+    props: {hash: String},
     components: {DownloadRound, DownloadDoneRound, DownloadingRound},
     mounted() {
-        this.getInfo();
+        this.updateStatus()
+    },
+    updated() {
+        this.updateStatus()
     },
     data() {
+        // @ts-ignore
+        let task = useDownloadTasksStore().tasks[this.hash as string]
         return {
             icon: DownloadRound,
-            downloading: false,
-            taskInfo: {},
-            name: "",
-            filepath: "",
+            name: task.taskName,
+            url: task.taskUrl,
+            filepath: task.taskTarget,
+            downloading: task.taskDownloading,
+            downloaded: task.taskDownloaded,
         }
     },
     methods: {
         deleteSelf() {
-            this.axios.post(`http://localhost:50000/download/delete/${this.hash}`)
+            if (fs.existsSync(this.filepath)) fs.unlinkSync(this.filepath)
+            useDownloadTasksStore().deleteTask(this.hash)
         },
-        getInfo() {
-            this.axios.get(`http://localhost:50000/download/taskConfig/${this.hash}`).then(data => {
-                this.taskInfo = data.data.data
-                this.filepath = this.taskInfo['fullpath']
-                if (process.platform === "win32")
-                    this.filepath = this.filepath.replaceAll('/', '\\')
-                this.name = this.taskInfo['name']
-            })
+        checkAndDownload() {
+            if ((!this.downloaded) && (!this.downloading)) this.download();
+        },
+        updateStatus() {
+            this.downloading = this.store.tasks[this.hash].taskDownloading;
+            this.downloaded = this.store.tasks[this.hash].taskDownloaded;
         },
         download() {
-            this.downloading = true
-            this.axios.post(`http://localhost:50000/download/start/${this.hash}`).then((_) => {
-                this.downloading = false
+            useDownloadTasksStore().tasks[this.hash].taskDownloading = true
+            this.updateStatus()
+
+            const args = ipcRenderer.sendSync("get-setting", {
+                "ProxyScheme": null,
+                "ProxyHost": null,
+                "ProxyPort": null
+            })
+            this.axios.get(this.url, {
+                proxy: {
+                    protocol: args['ProxyScheme'].length ? args['ProxyScheme'] : null,
+                    host: args['ProxyScheme'].length ? args['ProxyHost'] : null,
+                    port: args['ProxyScheme'].length ? args["ProxyPort"] : null
+                },
+            }).then((response) => {
+                fs.writeFileSync(this.filepath, JSON.stringify(response.data))
+                useDownloadTasksStore().tasks[this.hash].taskDownloaded = true
+                useDownloadTasksStore().tasks[this.hash].taskDownloading = false
+                this.updateStatus()
             })
         },
         showFile() {
@@ -80,6 +103,7 @@ export default defineComponent({
             })
         },
     },
+
 })
 </script>
 

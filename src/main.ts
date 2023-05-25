@@ -7,9 +7,11 @@ import router from './router'
 import naive from 'naive-ui'
 import 'vfonts/Lato.css'
 import 'vfonts/FiraCode.css'
+import {createPinia} from 'pinia'
 
 const app = createApp(App);
-app.use(VueAxios, axios).use(router).use(naive);
+
+app.use(VueAxios, axios).use(router).use(naive).use(createPinia());
 
 app.mount('#app').$nextTick(() => {
     postMessage({payload: 'removeLoading'}, '*')

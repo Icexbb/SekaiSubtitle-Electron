@@ -5,6 +5,7 @@ import path from 'path';
 import cp from 'child_process';
 import * as fs from 'fs';
 
+const WebSocket = require('ws')
 // The built directory structure
 //
 // ├─┬ dist-electron
@@ -20,20 +21,17 @@ process.env.DIST = join(process.env.DIST_ELECTRON, '../dist')
 process.env.PUBLIC = process.env.VITE_DEV_SERVER_URL
     ? join(process.env.DIST_ELECTRON, '../public')
     : process.env.DIST
-
 const USER_HOME = process.env.HOME || process.env.USERPROFILE
 const PROGRAM_DIR = process.platform === 'win32'
     ? path.join(USER_HOME, 'Documents', 'SekaiSubtitle')
     : path.join(USER_HOME, 'SekaiSubtitle')
-
 const EXTRA_RESOURCES_PATH = app.isPackaged
     ? path.join(process.resourcesPath)
     : path.join(__dirname, '../../extra');
 const getExtraResourcesPath = (...paths: string[]): string => {
     return path.join(EXTRA_RESOURCES_PATH, ...paths);
 };
-const backendBin: string = getExtraResourcesPath(process.platform === 'win32' ? 'core.exe' : 'core.bin');
-let backendCP: cp.ChildProcess = null;
+
 // Disable GPU Acceleration for Windows 7
 if (release().startsWith('6.1')) app.disableHardwareAcceleration()
 
@@ -45,10 +43,7 @@ if (!app.requestSingleInstanceLock()) {
     process.exit(0)
 }
 
-// Remove electron security warnings
-// This warning only shows in development mode
-// Read more on https://www.electronjs.org/docs/latest/tutorial/security
-// process.env['ELECTRON_DISABLE_SECURITY_WARNINGS'] = 'true'
+process.env['ELECTRON_DISABLE_SECURITY_WARNINGS'] = 'true'
 
 let win: BrowserWindow | null = null
 // Here, you can also use other preload
@@ -56,7 +51,12 @@ const preload = join(__dirname, '../preload/index.js')
 const url = process.env.VITE_DEV_SERVER_URL
 const indexHtml = join(process.env.DIST, 'index.html')
 let running = true;
-
+const CoreBin: string = getExtraResourcesPath(process.platform === 'win32' ? 'core.exe' : 'core.bin');
+const CoreVersion = cp.execSync(`"${CoreBin}" -v`).toString()
+const AppVersion = require(getExtraResourcesPath(app.isPackaged ? "package.json" : "../package.json")).version;
+let CoreProcess: cp.ChildProcess = null;
+let CoreConnected = false;
+let CoreAliveSocket = null;
 
 async function createWindow() {
     win = new BrowserWindow({
@@ -64,26 +64,23 @@ async function createWindow() {
         icon: join(process.env.PUBLIC, 'favicon.ico'),
         webPreferences: {
             preload,
-            // Warning: Enable nodeIntegration and disable contextIsolation is not secure in production
-            // Consider using contextBridge.exposeInMainWorld
-            // Read more on https://www.electronjs.org/docs/latest/tutorial/context-isolation
             nodeIntegration: true,
             contextIsolation: false,
-            sandbox: false
+            sandbox: false,
+            webSecurity: false,
         },
         // frame: false,
         // titleBarStyle: 'hidden'
-
     })
     win.setMenuBarVisibility(false)
 
 
     if (process.env.VITE_DEV_SERVER_URL) { // electron-vite-vue#298
-        win.loadURL(url)
+        await win.loadURL(url)
         // Open devTool if the app is not packaged
         win.webContents.openDevTools()
     } else {
-        win.loadFile(indexHtml)
+        await win.loadFile(indexHtml)
     }
 
     // Test actively push message to the Electron-Renderer
@@ -98,40 +95,63 @@ async function createWindow() {
     })
     win.webContents.on('will-navigate', (event, url) => {
     }) // #344
+}
 
-    fs.stat(backendBin, (err) => {
-        if (err) {
-            console.log(err)
-        } else {
-            try {
-                backendCP = cp.execFile(backendBin, (error, stdout, stderr) => {
-                    if (running) {
-                        if (error)
-                            console.log('Error:', error);
-                        if (stdout)
-                            console.log("Stdout:", stdout);
-                        if (stderr)
-                            console.log("Stderr", stderr);
-                    }
-                })
-            } catch (e) {
-                alert(e)
-                app.quit()
-            }
+function initSocket() {
+    CoreAliveSocket = new WebSocket('ws://localhost:50000/alive')
+
+    CoreAliveSocket.onopen = () => {
+        console.log("WebSocket Connected")
+        CoreConnected = true;
+        CoreAliveSocket.send(JSON.stringify({type: "alive"}));
+    }
+    CoreAliveSocket.onclose = () => {
+        CoreConnected = false;
+        if (running) setTimeout(initSocket, 500);
+    }
+    CoreAliveSocket.onmessage = () => {
+        if (!CoreConnected) CoreConnected = true;
+        CoreAliveSocket.send(JSON.stringify({type: "alive"}));
+    }
+    CoreAliveSocket.onerror = (res) => {
+        CoreConnected = false;
+        console.log('WebSocket Error');
+    }
+}
+
+let CoreLogs: string[] = [];
+
+function appendLog(data: Buffer) {
+    let logString = data.toString()
+    let logArr = logString.split('\n')
+        .map(value => value.replace('\r', ""))
+    let logSet = new Set<string>(logArr)
+    Array.from(logSet).forEach(value => {
+        if (value.length) {
+            CoreLogs.push(value);
         }
     })
 }
 
-app.whenReady().then(createWindow)
+app.whenReady().then(() => {
+    if (fs.existsSync(CoreBin)) {
+        CoreProcess = cp.spawn(`"${CoreBin}"`, {shell: true})
+        CoreProcess.stderr.on("data", appendLog)
+
+    }
+}).then(() => {
+    setTimeout(initSocket, 1500)
+}).then(createWindow)
 app.on('window-all-closed', () => {
     running = false
     win = null
     try {
-        backendCP.kill();
+        CoreProcess.kill();
     } finally {
         app.quit();
     }
 })
+
 
 app.on('second-instance', () => {
     if (win) {
@@ -151,6 +171,10 @@ app.on('activate', () => {
     }
 })
 
+process.on('uncaughtException', function (err) {
+    console.log(err);
+});
+
 // New window example arg: new windows url
 ipcMain.handle('open-win', (_, arg) => {
     const childWindow = new BrowserWindow({
@@ -160,7 +184,6 @@ ipcMain.handle('open-win', (_, arg) => {
             contextIsolation: false,
         },
     })
-
     if (process.env.VITE_DEV_SERVER_URL) {
         childWindow.loadURL(`${url}#${arg}`).then(r => {
         })
@@ -265,19 +288,21 @@ ipcMain.on('get-setting', (event, args) => {
     const setting = fs.existsSync(path.join(PROGRAM_DIR, 'setting.json'))
         ? JSON.parse(fs.readFileSync(path.join(PROGRAM_DIR, 'setting.json')).toString())
         : {}
+    let result;
     if ((typeof args) === 'string') {
+        result = setting[args]
         event.sender.send('get-setting-result', setting[args])
     } else if ((typeof args) === 'object') {
-        let result = {}
+        result = {}
         Object.keys(args).forEach((value) => {
             result[value] = setting[value]
         })
-        event.sender.send('get-setting-result', result)
     } else {
-        event.sender.send('get-setting-result', setting)
+        result = setting
     }
+    event.sender.send('get-setting-result', result)
+    event.returnValue = result
 })
-
 ipcMain.on('drag-start', (event, filePath) => {
     event.sender.startDrag({
         file: filePath,
@@ -298,4 +323,19 @@ ipcMain.on('notification-show', (event, args: [NotificationOption, string]) => {
         require('child_process').exec(`explorer.exe /select,${args[1]}`)
     })
     notification.show()
+})
+
+ipcMain.on("get-core-logs", (event) => {
+    event.sender.send('get-core-logs-result', CoreLogs)
+})
+ipcMain.on("get-core-version", (event) => {
+    event.sender.send("get-core-version-result", CoreVersion)
+})
+
+ipcMain.on("get-core-alive", (event) => {
+    event.sender.send("get-core-alive-result", CoreConnected)
+})
+
+ipcMain.on("get-app-version", (event) => {
+    event.sender.send("get-app-version-result", AppVersion)
 })

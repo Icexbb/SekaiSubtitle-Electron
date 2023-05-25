@@ -79,8 +79,8 @@ import {ipcRenderer} from "electron";
 
 const proxySchemeOption = [
     {label: '无', value: ''},
-    {label: 'socks5://', value: 'socks5://'},
-    {label: 'http://', value: 'http://'}
+    {label: 'socks5://', value: 'socks5'},
+    {label: 'http://', value: 'http'}
 ]
 export default defineComponent({
     name: "Setting",
@@ -90,6 +90,9 @@ export default defineComponent({
         }
     },
     mounted() {
+        this.reloadConfig()
+    },
+    updated() {
         this.reloadConfig()
     },
     data() {
@@ -110,7 +113,7 @@ export default defineComponent({
                 ProxyScheme: this.settingProxyScheme,
                 ProxyHost: this.settingProxyHost,
                 ProxyPort: this.settingProxyPort,
-                proxy: this.settingProxyScheme ? `${this.settingProxyScheme}${this.settingProxyHost}:${this.settingProxyPort}` : ``,
+                proxy: this.settingProxyScheme ? `${this.settingProxyScheme}://${this.settingProxyHost}:${this.settingProxyPort}` : ``,
                 SubtitleAlwaysOverwrite: this.settingSubtitleAlwaysOverwrite,
                 SubtitleRunAfterCreate: this.settingSubtitleRunAfterCreate,
                 SubtitleTyperFade: this.settingSubtitleTyperFade,

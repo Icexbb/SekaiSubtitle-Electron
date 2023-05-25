@@ -1,5 +1,6 @@
 <template>
-    <n-card style="height: 100%;user-select: none;" content-style="padding: 1em;height:100%;" header-style="padding: 1em;"
+    <n-card style="height: 100%;user-select: none;" content-style="padding: 1em;height:100%;"
+            header-style="padding: 1em;"
             :segmented="false" class="full-height">
         <template #header>
             <n-page-header class="header" title="数据下载"/>
@@ -54,15 +55,14 @@
                     </n-button>
                 </n-space>
             </n-space>
-            <n-card>
+            <n-card style="height: max-content;">
                 <template #header>
                     下载任务列表
                 </template>
                 <template #default>
                     <n-space>
-                        <template v-for="hash in Object.keys(this.downloadRequests)" :key="hash">
-                            <DownloadRequest :hash="hash" :status="this.downloadRequests[hash]"
-                                             :ref="hash"></DownloadRequest>
+                        <template v-for="taskId in Object.keys(this.DownloadTasks)" :key="taskId">
+                            <DownloadRequest :hash="taskId" :ref="taskId"/>
                         </template>
                     </n-space>
                 </template>
@@ -72,6 +72,18 @@
                         <n-button @click="this.startAll">开始全部</n-button>
                     </n-space>
                 </template>
+                <template #header-extra>
+                    <n-popover placement="left" trigger="hover" :disabled="!Boolean(this.proxy.length)">
+                        <template #trigger>
+                            <n-icon :color="this.proxy.length?'#63e2b7':'#AAAAAAAA'">
+                                <ServerProxy/>
+                            </n-icon>
+                        </template>
+                        <template #default>
+                            <span>{{ this.proxy }}</span>
+                        </template>
+                    </n-popover>
+                </template>
             </n-card>
         </n-space>
     </n-card>
@@ -80,20 +92,38 @@
 import {defineComponent, ref} from "vue";
 import {createHash} from "crypto";
 import DownloadRequest from "../components/DownloadRequest.vue";
+import {ServerProxy} from "@vicons/carbon"
+import {AssetDir, download_list, update_tree} from "../utils/asset";
+import {useDownloadTasksStore, DownloadTaskInfo} from "../stores/DownloadTasks";
+import path from "path";
+import {ipcRenderer} from "electron";
+import {chara_id} from "../utils/constants";
 
 const dataSourceOpt = [
     {label: 'https://sekai.best/', value: "best",},
     {label: 'https://pjsek.ai/', value: "ai",}
 ]
+
 export default defineComponent({
-    components: {DownloadRequest},
+    components: {DownloadRequest, ServerProxy},
     setup() {
+        const store = useDownloadTasksStore();
+        let DownloadTasks = ref({})
+        store.$subscribe((mutation, state) => {
+            DownloadTasks.value = state.tasks
+        })
+        DownloadTasks.value = store.$state.tasks
         return {
-            dataSourceOpt, createHash
+            dataSourceOpt, createHash, store, DownloadTasks
         }
     },
     mounted() {
         this.updateTree()
+        this.proxy = ipcRenderer.sendSync("get-setting", "proxy")
+    },
+    updated() {
+        this.updateTree()
+        this.proxy = ipcRenderer.sendSync("get-setting", "proxy")
     },
     data() {
         return {
@@ -111,23 +141,23 @@ export default defineComponent({
             groupLabel3: '剧情话数',
             selectOption3: [],
             selectedOpt3: [],
-
             webSocket: null,
-            url: 'ws://localhost:50000/download/tasks',
-            downloadRequests: ref({}),
-            living: ref(true),
         }
     },
     methods: {
         updateTree(refresh = false) {
             this.treeLoading = true
-            let url = `http://localhost:50000/download/update?` +
-                `source=${this.source}&proxy=${this.proxy}&timeout=${this.timeout}&refresh=${refresh}`
-            this.axios.get(url).then(result => {
-                this.sourceList = result.data.data
-                this.treeLoading = false
+            if (refresh) {
+                download_list(this.source).finally(() => {
+                    this.sourceList = update_tree(this.source)
+                    this.updateOption1()
+                    this.treeLoading = false
+                })
+            } else {
+                this.sourceList = update_tree(this.source)
                 this.updateOption1()
-            })
+                this.treeLoading = false
+            }
         },
         updateOption1() {
             this.selectOption1 = []
@@ -160,18 +190,63 @@ export default defineComponent({
             this.updateOption2()
         },
         updateOption2() {
+            switch (this.selectedOpt1) {
+                case "地图对话 - 地点筛选":
+                    this.groupLabel2 = "地点名称";
+                    this.groupLabel3 = "对话序号";
+                    break;
+                case "地图对话 - 月度追加":
+                    this.groupLabel2 = "追加时间";
+                    this.groupLabel3 = "对话序号";
+                    break;
+                case "地图对话 - 活动追加":
+                    this.groupLabel2 = "追加活动";
+                    this.groupLabel3 = "对话序号";
+                    break;
+                case "地图对话 - 人物筛选":
+                    this.groupLabel2 = "角色名称";
+                    this.groupLabel3 = "对话序号";
+                    break;
+                case "活动剧情":
+                    this.groupLabel2 = "活动期数";
+                    this.groupLabel3 = "剧情话数";
+                    break;
+                case "特殊剧情":
+                    this.groupLabel2 = "剧情类别";
+                    this.groupLabel3 = "剧情话数";
+                    break;
+                case "主线剧情":
+                    this.groupLabel2 = "乐队章节";
+                    this.groupLabel3 = "剧情话数";
+                    break;
+                case "卡牌剧情":
+                    this.groupLabel2 = "所属角色";
+                    this.groupLabel3 = "角色卡牌";
+                    break;
+                default:
+                    this.groupLabel2 = '剧情期数'
+                    this.groupLabel3 = '剧情话数'
+            }
+
             this.selectOption2 = []
             if (this.selectedOpt1)
                 Object.keys(this.sourceList[this.selectedOpt1]).sort(this.compareString).forEach((value) => {
                     this.selectOption2.push({label: value, value: value})
                 })
+            if (this.selectedOpt1 == "活动剧情" || this.selectedOpt1 == "地图对话 - 活动追加" || this.selectedOpt1 == "地图对话 - 月度追加") {
+                this.selectOption2.reverse()
+            } else if (this.selectedOpt1 == "卡牌剧情" || this.selectedOpt1 == "地图对话 - 人物筛选") {
+                this.selectOption2.sort(
+                    (a, b) => {
+                        return chara_id[a.label] - chara_id[b.label]
+                    }
+                )
+            }
             if (this.selectOption2.length)
                 this.selectedOpt2 = this.selectOption2[0].label
             else
                 this.selectedOpt2 = ''
-
             this.updateOption3()
-
         },
         updateOption3() {
             this.selectOption3 = []
@@ -183,19 +258,23 @@ export default defineComponent({
             this.selectedOpt3 = []
         },
         option3SelectAll() {
+            this.selectedOpt3 = []
             this.selectOption3.forEach((item) => {
                 this.selectedOpt3.push(item.label)
             })
         },
         addDownloadRequests() {
             this.selectedOpt3.forEach((value) => {
-                let item = {
-                    name: value,
-                    url: this.sourceList[this.selectedOpt1][this.selectedOpt2][value],
+                let url: string = this.sourceList[this.selectedOpt1][this.selectedOpt2][value];
+                let item: DownloadTaskInfo = {
+                    taskName: value,
+                    taskUrl: url,
+                    taskId: this.createHash('md5').update(value).update(url).update(Date.now().toString()).digest('hex'),
+                    taskTarget: path.join(AssetDir, this.source, url.substring(url.lastIndexOf("/") + 1)),
+                    taskDownloaded: false,
+                    taskDownloading: false
                 }
-                item['hash'] = this.createHash('md5').update(item.name)
-                    .update(item.url).update(Date.now().toString()).digest('hex')
-                this.axios.post("http://localhost:50000/download/new", item)
+                this.store.newTask(item)
             })
             this.selectedOpt3 = []
         },
@@ -205,63 +284,17 @@ export default defineComponent({
             else
                 return a.localeCompare(b)
         },
-        initSocket() {
-            let url = this.url
-            this.webSocket = new WebSocket(url)
-            this.webSocket.onopen = this.webSocketOnOpen
-            this.webSocket.onclose = this.webSocketOnClose
-            this.webSocket.onmessage = this.webSocketOnMessage
-            this.webSocket.onerror = this.webSocketOnError
-        },
-        webSocketOnOpen() {
-            this.webSocket.send(JSON.stringify({type: "alive"}));
-        },
-        webSocketOnMessage(res) {
-            const data = JSON.parse(res.data)
-            if (data['type'] === 'tasks') {
-                this.downloadRequests = data['data']
-            }
-            this.webSocket.send(JSON.stringify({type: "alive"}));
-        },
-        webSocketOnClose() {
-            if (this.webSocket)
-                this.webSocket.close()
-            if (this.living) {
-                setTimeout(this.initSocket, 100)
-                console.log("WebSocket Closed Unexpectedly")
-                this.downloadRequests = {}
-            }
-        },
-        webSocketOnError(res) {
-            console.log('websocket连接失败');
-            console.log(res);
-        },
         deleteAll() {
-            Object.keys(this.downloadRequests).forEach(taskId => {
-                this.axios.post(`http://localhost:50000/download/delete/${taskId}`)
+            Object.keys(this.DownloadTasks).forEach(taskId => {
+                useDownloadTasksStore().deleteTask(taskId)
             })
         },
         startAll() {
-            Object.keys(this.downloadRequests).forEach(taskId => {
-                const obj = this.$refs[taskId][0]
-                if (!obj.status)
-                    obj.download()
+            Object.keys(this.DownloadTasks).forEach(taskId => {
+                this.$refs[taskId][0].checkAndDownload()
             })
         }
     },
-    created() {
-        if (!this.webSocket)
-            this.initSocket()
-    },
-    unmounted() {
-        this.living = false
-        try {
-            if (this.webSocket)
-                this.webSocket.close()
-        } finally {
-            this.webSocket = null
-        }
-    }
 })
 </script>
 <style scoped>

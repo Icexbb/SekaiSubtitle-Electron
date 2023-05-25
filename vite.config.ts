@@ -6,6 +6,7 @@ import renderer from 'vite-plugin-electron-renderer'
 import pkg from './package.json'
 
 // https://vitejs.dev/config/
+// @ts-ignore
 export default defineConfig(({command}) => {
     rmSync('dist-electron', {recursive: true, force: true})
 
@@ -65,6 +66,16 @@ export default defineConfig(({command}) => {
             return {
                 host: url.hostname,
                 port: +url.port,
+                proxy: {
+                    "^/best": {
+                        target: "https://storage.sekai.best/sekai-assets",
+                        changeOrigin: true,
+                        rewrite: (path) => {
+                            path.replace(/^\/best/, "")
+                        },
+
+                    }
+                },
             }
         })(),
         clearScreen: false,
