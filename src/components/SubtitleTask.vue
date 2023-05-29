@@ -27,7 +27,10 @@
                         <span>FPS: {{ this.fps.toFixed(1) }} ETA: {{ this.eta.toFixed(0) }}s</span>
                     </template>
                     <template #default>
-                        <n-log :font-size="12" style="text-align:left;" :log="this.taskLogStrings.join('\n')"/>
+                        <n-scrollbar style=" height: 150px">
+                            <n-log :font-size="12" style="text-align:left;height: max-content;"
+                                   :log="this.taskLogStrings.join('\n')"/>
+                        </n-scrollbar>
                     </template>
                 </n-collapse-item>
             </n-collapse>
@@ -41,10 +44,10 @@
                     {{ this.status === 'idle' ? '开始处理' : '中止任务' }}
                 </n-button>
                 <n-button secondary strong size="small" type="warning"
-                          @click="()=>{this.taskReload();this.taskControl('reload')}">重新加载
+                          @click="()=>{this.taskControl('reload')}">重新加载
                 </n-button>
                 <n-button secondary strong size="small" type="error"
-                          @click="()=>{this.taskReload();this.taskControl('delete')}">删除任务
+                          @click="()=>{this.taskControl('delete')}">删除任务
                 </n-button>
             </n-space>
         </template>
@@ -60,7 +63,7 @@ export default defineComponent({
     data() {
         return {
             webSocket: null,
-            url: `ws://localhost:50000/subtitle/status/${this.task_id}`,
+            url: `ws://${ipcRenderer.sendSync("get-core-url")}/subtitle/status/${this.task_id}`,
             taskLogs: [],
             taskLogCount: 0,
             currentProgress: 0,
@@ -72,16 +75,8 @@ export default defineComponent({
             eta: 0
         }
     },
+    inject: ["GeneralTasksControl"],
     methods: {
-        initConfig() {
-            this.axios.get(`http://localhost:50000/subtitle/taskConfig/${this.task_id}`).then(
-                data => {
-                    this.taskConfig = data.data['data']
-                    const filename = this.taskConfig['video_file'].replaceAll('\\', "/")
-                    this.taskName = filename.substring(filename.lastIndexOf('/') + 1, filename.lastIndexOf('.'))
-                }
-            )
-        },
         initSocket() {
             let url = this.url
             this.webSocket = new WebSocket(url)
@@ -91,7 +86,7 @@ export default defineComponent({
             this.webSocket.onerror = this.webSocketOnError
         },
         webSocketOnOpen() {
-            this.webSocket.send(JSON.stringify({"request": this.taskLogCount}));
+            this.webSocket.send(JSON.stringify({"request": "config"}));
         },
         webSocketOnMessage(res) {
             const data = JSON.parse(res.data)
@@ -113,22 +108,24 @@ export default defineComponent({
                         this.taskLogStrings.push(log['data'])
                     }
                 })
-                if (this.currentProgress == 100 && !this.taskNoticed) {
-                    this.messageFinish();
-                }
+                if (this.currentProgress == 100 && !this.taskNoticed) this.messageFinish();
+            } else if (data['type'] == 'config') {
+                this.taskConfig = data['data']
+                const filename = this.taskConfig['video_file'].replaceAll('\\', "/")
+                this.taskName = filename.substring(filename.lastIndexOf('/') + 1, filename.lastIndexOf('.'))
             }
             this.webSocket.send(JSON.stringify({"request": this.taskLogCount}))
-
         },
         webSocketOnClose() {
-            this.webSocket.close()
+            if (this.webSocket) this.webSocket.close();
         },
         webSocketOnError(res) {
             console.log('websocket连接失败');
             console.log(res);
         },
         taskControl(operate) {
-            this.axios.post(`http://localhost:50000/subtitle/${operate}/${this.task_id}`)
+            if (operate == 'start' || operate == "reload") this.taskReload();
+            this.GeneralTasksControl(operate, this.task_id)
         },
         taskReload() {
             this.taskLogs = []
@@ -152,12 +149,9 @@ export default defineComponent({
         }
     },
     created() {
-        // 页面打开就建立连接，根据业务需要
-        this.initConfig()
         this.initSocket()
     },
     unmounted() {
-        // 页面销毁关闭连接
         this.webSocket.close()
     }
 })

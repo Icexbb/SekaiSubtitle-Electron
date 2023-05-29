@@ -65,25 +65,14 @@ export default defineComponent({
             if ((!this.downloaded) && (!this.downloading)) this.download();
         },
         updateStatus() {
-            this.downloading = this.store.tasks[this.hash].taskDownloading;
-            this.downloaded = this.store.tasks[this.hash].taskDownloaded;
+            this.downloading = useDownloadTasksStore().tasks[this.hash].taskDownloading;
+            this.downloaded = useDownloadTasksStore().tasks[this.hash].taskDownloaded;
         },
         download() {
             useDownloadTasksStore().tasks[this.hash].taskDownloading = true
             this.updateStatus()
 
-            const args = ipcRenderer.sendSync("get-setting", {
-                "ProxyScheme": null,
-                "ProxyHost": null,
-                "ProxyPort": null
-            })
-            this.axios.get(this.url, {
-                proxy: {
-                    protocol: args['ProxyScheme'].length ? args['ProxyScheme'] : null,
-                    host: args['ProxyScheme'].length ? args['ProxyHost'] : null,
-                    port: args['ProxyScheme'].length ? args["ProxyPort"] : null
-                },
-            }).then((response) => {
+            this.axios.get(this.url).then((response) => {
                 fs.writeFileSync(this.filepath, JSON.stringify(response.data))
                 useDownloadTasksStore().tasks[this.hash].taskDownloaded = true
                 useDownloadTasksStore().tasks[this.hash].taskDownloading = false
@@ -94,14 +83,16 @@ export default defineComponent({
             if (Boolean(this.filepath) && this.status) {
                 require('child_process').exec(`explorer.exe /select,${this.filepath}`)
             }
-        },
+        }
+        ,
         dragOut(event) {
             event.preventDefault()
             ipcRenderer.send('drag-start', this.filepath)
             ipcRenderer.once('drag-finished', () => {
                 this.deleteSelf()
             })
-        },
+        }
+        ,
     },
 
 })

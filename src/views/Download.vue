@@ -8,7 +8,7 @@
         <n-space vertical :wrap-item="false" style="height:100%" justify="space-between">
             <n-space ertical :wrap-item="false" justify="start">
                 <n-input-group>
-                    <n-input-group-label>数据源</n-input-group-label>
+                    <n-input-group-label>数据来源</n-input-group-label>
                     <n-select
                             :options="this.dataSourceOpt" :default-value="'https://sekai.best/'"
                             v-model:value="this.source" @update:value="()=>{this.updateTree(false)}"
@@ -32,7 +32,9 @@
                     <n-select :loading="this.treeLoading" style="width: 100%;"
                               :options="this.selectOption2" remote
                               v-model:value="this.selectedOpt2"
-                              @update:value="this.updateOption3"/>
+                              @update:value="this.updateOption3"
+                              @wheel="this.scrollG2"
+                    />
                 </n-input-group>
                 <n-input-group>
                     <n-input-group-label style="height: 100%;">
@@ -293,6 +295,12 @@ export default defineComponent({
             Object.keys(this.DownloadTasks).forEach(taskId => {
                 this.$refs[taskId][0].checkAndDownload()
             })
+        },
+        scrollG2(e) {
+            let cIndex = this.selectOption2.map(x => x.value).indexOf(this.selectedOpt2);
+            cIndex += Math.sign(e.deltaY);
+            if (cIndex >= 0 && cIndex < this.selectOption2.length)
+                this.selectedOpt2 = this.selectOption2[cIndex].value;
         }
     },
 })

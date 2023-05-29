@@ -1,6 +1,5 @@
 import path from "path";
 import * as fs from 'fs';
-import {ipcRenderer} from "electron";
 import {area_name, chara_name, unit_name} from "./constants";
 
 interface SourceList {
@@ -54,17 +53,10 @@ function download_list(source: string): Promise<any[]> {
     if (!fs.existsSync(root)) fs.mkdirSync(root, {recursive: true});
 
     const axios = require('axios')
-    const args = ipcRenderer.sendSync("get-setting", {"ProxyScheme": null, "ProxyHost": null, "ProxyPort": null})
 
     let allAxios: Promise<any>[] = []
     Object.keys(source_list).forEach(value => {
-        allAxios.push(axios.get(source_list[value], {
-            proxy: {
-                protocol: args['ProxyScheme'].length ? args['ProxyScheme'] : null,
-                host: args['ProxyScheme'].length ? args['ProxyHost'] : null,
-                port: args['ProxyScheme'].length ? args["ProxyPort"] : null
-            },
-        }))
+        allAxios.push(axios.get(source_list[value]))
     })
     return axios.all(allAxios)
         .then(axios.spread((

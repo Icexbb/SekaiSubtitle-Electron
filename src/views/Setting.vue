@@ -12,13 +12,16 @@
                         <n-space :wrap="false" :wrap-item="false" justify="space-between" style="width: 100%;">
                             <n-text class="center">下载代理</n-text>
                             <n-input-group style="width: min-content">
-                                <n-select style="width: 110px;" :options="this.proxySchemeOption"
+                                <n-select style="width: 100px;" :options="this.proxySchemeOption"
                                           v-model:value="this.settingProxyScheme"/>
                                 <n-input v-model:value="this.settingProxyHost" v-if="this.settingProxyScheme"
-                                         style="width: 120px"/>
+                                         style="width: 120px;height: 34px;"/>
                                 <n-input-number
-                                        style="width: 110px;" :min="1" :max="65535" v-if="this.settingProxyScheme"
+                                        style="width: 100px;" :min="1" :max="65535" v-if="this.settingProxyScheme"
                                         v-model:value="this.settingProxyPort"
+                                        @wheel="e=>{
+                                            this.settingProxyPort=Math.min(Math.max(1,this.settingProxyPort+Math.sign(e.deltaY)),65535)
+                                        }"
                                 />
                             </n-input-group>
                         </n-space>
@@ -49,22 +52,26 @@
                                 <n-text class="center">
                                     打字机特效时间
                                 </n-text>
-                                <n-input-group style="width: min-content;">
+                                <n-space justify="end" style="width: min-content">
                                     <n-input-number
                                             v-model:value="this.settingSubtitleTyperFade"
                                             style="width: 175px"
+                                            @wheel="(e)=>{
+                                                this.settingSubtitleTyperFade=Math.min(Math.max(0,this.settingSubtitleTyperFade+Math.sign(e.deltaY)*10),this.settingSubtitleTyperInterval)}"
                                             :step="10" :min="0" :max="this.settingSubtitleTyperInterval">
                                         <template #prefix><span style="color: gray">渐变时间</span></template>
                                         <template #suffix>ms</template>
                                     </n-input-number>
                                     <n-input-number
                                             style="width: 175px"
+                                            @wheel="(e)=>{
+                                                this.settingSubtitleTyperInterval=Math.max(this.settingSubtitleTyperFade,this.settingSubtitleTyperInterval+Math.sign(e.deltaY)*10);}"
                                             v-model:value="this.settingSubtitleTyperInterval"
                                             :step="10" :min="this.settingSubtitleTyperFade">
                                         <template #prefix><span style="color: gray">字符间隔</span></template>
                                         <template #suffix>ms</template>
                                     </n-input-number>
-                                </n-input-group>
+                                </n-space>
                             </n-space>
                         </n-card>
                     </n-space>
@@ -113,7 +120,7 @@ export default defineComponent({
                 ProxyScheme: this.settingProxyScheme,
                 ProxyHost: this.settingProxyHost,
                 ProxyPort: this.settingProxyPort,
-                proxy: this.settingProxyScheme ? `${this.settingProxyScheme}://${this.settingProxyHost}:${this.settingProxyPort}` : ``,
+                proxy: this.settingProxyScheme.length ? `${this.settingProxyScheme}://${this.settingProxyHost}:${this.settingProxyPort}` : ``,
                 SubtitleAlwaysOverwrite: this.settingSubtitleAlwaysOverwrite,
                 SubtitleRunAfterCreate: this.settingSubtitleRunAfterCreate,
                 SubtitleTyperFade: this.settingSubtitleTyperFade,
@@ -126,7 +133,7 @@ export default defineComponent({
         },
         reloadConfig() {
             ipcRenderer.send('get-setting')
-            ipcRenderer.on('get-setting-result', (event, args) => {
+            ipcRenderer.once('get-setting-result', (event, args) => {
                 this.settingProxyScheme = args['ProxyScheme']
                 this.settingProxyHost = args['ProxyHost']
                 this.settingProxyPort = args['ProxyPort']

@@ -1,11 +1,14 @@
-import {app, BrowserWindow, shell, ipcMain, dialog, Notification} from 'electron'
+import {app, BrowserWindow, shell, ipcMain, dialog, Notification, ipcRenderer} from 'electron'
 import {release} from 'node:os'
 import {join} from 'node:path'
 import path from 'path';
 import cp from 'child_process';
 import * as fs from 'fs';
+import * as net from "net";
 
+const axios = require("axios")
 const WebSocket = require('ws')
+const semver = require("semver")
 // The built directory structure
 //
 // ├─┬ dist-electron
@@ -51,13 +54,39 @@ const preload = join(__dirname, '../preload/index.js')
 const url = process.env.VITE_DEV_SERVER_URL
 const indexHtml = join(process.env.DIST, 'index.html')
 let running = true;
-const CoreBin: string = getExtraResourcesPath(process.platform === 'win32' ? 'core.exe' : 'core.bin');
-const CoreVersion = cp.execSync(`"${CoreBin}" -v`).toString()
-const AppVersion = JSON.parse(fs.readFileSync(path.join(__dirname, "../../package.json")).toString()).version;
-let CoreProcess: cp.ChildProcess = null;
+const CoreBin: string = path.join(PROGRAM_DIR, "core", process.platform === 'win32' ? 'core.exe' : 'core.bin');
 
-let CoreConnected = false;
-let CoreAliveSocket = null;
+let CoreVersion;
+
+function initCoreVersion() {
+    const CoreBinPacked: string = getExtraResourcesPath(process.platform === 'win32' ? 'core.exe' : 'core.bin');
+    if (fs.existsSync(CoreBin)) {
+        CoreVersion = cp.execSync(`"${CoreBin}" -v`).toString()
+    }
+    if (fs.existsSync(CoreBinPacked)) {
+        let CorePackedVersion = cp.execSync(`"${CoreBinPacked}" -v`).toString()
+        if (!fs.existsSync(CoreBin)) {
+            fs.cpSync(CoreBinPacked, CoreBin);
+            CoreVersion = CorePackedVersion;
+        } else if (semver.gt(CorePackedVersion, CoreVersion, true)) {
+            fs.cpSync(CoreBinPacked, CoreBin);
+            CoreVersion = CorePackedVersion;
+        } else if (fs.statSync(CoreBinPacked).mtimeMs > fs.statSync(CoreBin).mtimeMs) {
+            fs.cpSync(CoreBinPacked, CoreBin);
+            CoreVersion = CorePackedVersion;
+        }
+        if (app.isPackaged) fs.unlinkSync(CoreBinPacked);
+    }
+}
+
+
+let CoreLatestVersion;
+const AppVersion = JSON.parse(fs.readFileSync(path.join(__dirname, "../../package.json")).toString()).version;
+let AppLatestVersion;
+let CoreProcess: cp.ChildProcess = null;
+let CorePort: number = null;
+let CoreConnected: Boolean = false;
+let CoreAliveSocket: WebSocket = null;
 
 async function createWindow() {
     win = new BrowserWindow({
@@ -94,12 +123,12 @@ async function createWindow() {
         if (url.startsWith('https:')) shell.openExternal(url)
         return {action: 'deny'}
     })
-    win.webContents.on('will-navigate', (event, url) => {
-    }) // #344
+    // win.webContents.on('will-navigate', (event, url) => {
+    // }) // #344
 }
 
 function initSocket() {
-    CoreAliveSocket = new WebSocket('ws://localhost:50000/alive')
+    CoreAliveSocket = new WebSocket(`ws://127.0.0.1:${CorePort}/alive`)
 
     CoreAliveSocket.onopen = () => {
         console.log("WebSocket Connected")
@@ -108,22 +137,33 @@ function initSocket() {
     }
     CoreAliveSocket.onclose = () => {
         CoreConnected = false;
-        if (running) setTimeout(initSocket, 500);
+        if (fs.existsSync(CoreBin) && CoreProcess && running) {
+            setTimeout(initSocket, 1500);
+        }
     }
     CoreAliveSocket.onmessage = () => {
         if (!CoreConnected) CoreConnected = true;
-        CoreAliveSocket.send(JSON.stringify({type: "alive"}));
+        setTimeout(() => {
+            CoreAliveSocket.send(JSON.stringify({type: "alive"}));
+        }, 500)
     }
     CoreAliveSocket.onerror = (res) => {
-        CoreConnected = false;
-        console.log('WebSocket Error');
+        if (!fs.existsSync(CoreBin)) {
+            CoreConnected = false;
+            //TODO
+        } else {
+            CoreConnected = false;
+            console.log('WebSocket Error: ', Object.keys(res));
+        }
     }
 }
 
 let CoreLogs: string[] = [];
 
 function appendLog(data: Buffer) {
-    let logString = data.toString()
+    const iconv = require('iconv-lite');
+
+    let logString: string = iconv.decode(data, 'gbk');
     let logArr = logString.split('\n')
         .map(value => value.replace('\r', ""))
     let logSet = new Set<string>(logArr)
@@ -134,20 +174,54 @@ function appendLog(data: Buffer) {
     })
 }
 
-app.whenReady().then(() => {
-    if (fs.existsSync(CoreBin)) {
-        CoreProcess = cp.spawn(`"${CoreBin}"`, {shell: true})
-        CoreProcess.stderr.on("data", appendLog)
 
-    }
-}).then(() => {
-    setTimeout(initSocket, 1500)
-}).then(createWindow)
+function getPort() {
+    return new Promise((resolve) => {
+        while (true) {
+            let port = 1024 + Math.floor(Math.random() * (65535 - 1024))
+            let server = net.createServer().listen(port);
+            if (server.listening) {
+                server.close()
+                resolve(port);
+                break
+            }
+        }
+    });
+}
+
+
+function initCore() {
+    initCoreVersion()
+    getPort().then(
+        (port: number) => {
+            CorePort = port
+            if (fs.existsSync(CoreBin)) {
+                CoreProcess = cp.spawn(`"${CoreBin}" -p ${CorePort}`, {shell: true})
+                CoreProcess.stderr.on("data", appendLog)
+                CoreProcess.stdout.on("data", appendLog)
+                console.log("Core Started!")
+            } else
+                console.log("Core Not Found!")
+        }
+    ).finally(() => {
+        setTimeout(initSocket, 1500)
+    })
+}
+
+
+app.whenReady().then(createWindow).then(() => {
+    const setting = fs.existsSync(path.join(PROGRAM_DIR, 'setting.json'))
+        ? JSON.parse(fs.readFileSync(path.join(PROGRAM_DIR, 'setting.json')).toString())
+        : {}
+    win.webContents.session.setProxy({proxyRules: setting['proxy']}).then();
+}).then(initCore)
+
 app.on('window-all-closed', () => {
     running = false
     win = null
     try {
-        CoreProcess.kill();
+        CoreAliveSocket.close()
+        if (CoreProcess) CoreProcess.kill();
     } finally {
         app.quit();
     }
@@ -167,7 +241,7 @@ app.on('activate', () => {
     if (allWindows.length) {
         allWindows[0].focus()
     } else {
-        createWindow().then(r => {
+        createWindow().then(() => {
         })
     }
 })
@@ -175,6 +249,11 @@ app.on('activate', () => {
 process.on('uncaughtException', function (err) {
     console.log(err);
 });
+
+interface NotificationOption {
+    title: string,
+    body: string
+}
 
 // New window example arg: new windows url
 ipcMain.handle('open-win', (_, arg) => {
@@ -186,14 +265,13 @@ ipcMain.handle('open-win', (_, arg) => {
         },
     })
     if (process.env.VITE_DEV_SERVER_URL) {
-        childWindow.loadURL(`${url}#${arg}`).then(r => {
+        childWindow.loadURL(`${url}#${arg}`).then(() => {
         })
     } else {
-        childWindow.loadFile(indexHtml, {hash: arg}).then(r => {
+        childWindow.loadFile(indexHtml, {hash: arg}).then(() => {
         })
     }
 })
-
 
 ipcMain.on('select-file-exist-video', function (event) {
     dialog.showOpenDialog({
@@ -204,7 +282,6 @@ ipcMain.on('select-file-exist-video', function (event) {
         event.sender.send('selected-video', result)
     })
 });
-
 ipcMain.on('select-file-exist-json', function (event) {
     dialog.showOpenDialog({
         title: '选择数据文件',
@@ -214,7 +291,6 @@ ipcMain.on('select-file-exist-json', function (event) {
         event.sender.send('selected-json', result)
     })
 });
-
 ipcMain.on('select-file-exist-translate', function (event) {
     dialog.showOpenDialog({
         title: '选择翻译文件',
@@ -224,7 +300,6 @@ ipcMain.on('select-file-exist-translate', function (event) {
         event.sender.send('selected-translate', result)
     })
 });
-
 ipcMain.on('select-file-save-subtitle', function (event) {
     dialog.showSaveDialog({
         title: '选择字幕文件保存位置',
@@ -234,7 +309,6 @@ ipcMain.on('select-file-save-subtitle', function (event) {
         event.sender.send('selected-subtitle-path', result)
     })
 });
-
 ipcMain.on('get-system-font', function (event) {
     let fontList = require('font-list')
     fontList.getFonts()
@@ -242,7 +316,6 @@ ipcMain.on('get-system-font', function (event) {
             event.sender.send("system-font", fonts)
         })
 });
-
 ipcMain.on('read-file-json', function (event) {
     dialog.showOpenDialog({
         title: '选择文件',
@@ -252,7 +325,6 @@ ipcMain.on('read-file-json', function (event) {
         event.sender.send('read-file-json-result', result)
     })
 });
-
 ipcMain.on('save-file-json', function (event, args) {
     dialog.showSaveDialog({
         properties: ['createDirectory',],
@@ -266,25 +338,18 @@ ipcMain.on('save-file-json', function (event, args) {
         }
     })
 });
-
 ipcMain.on('save-setting', (event, args) => {
-    if (!fs.existsSync(PROGRAM_DIR)) {
-        fs.mkdir(PROGRAM_DIR, (err) => {
-            if (err) console.log(err)
-        })
-    }
+    if (!fs.existsSync(PROGRAM_DIR)) fs.mkdirSync(PROGRAM_DIR)
+
     if (fs.existsSync(PROGRAM_DIR)) {
         fs.writeFile(path.join(PROGRAM_DIR, 'setting.json'), JSON.stringify(args), err => {
-            if (err) {
-                console.log(err);
-                alert(`设置文件保存失败:${err}`)
-            }
+            if (err) alert(`设置文件保存失败:${err}`)
+            win.webContents.session.setProxy({proxyRules: args['proxy']}).then();
         })
     } else {
         alert(`配置文件夹创建失败！`)
     }
 })
-
 ipcMain.on('get-setting', (event, args) => {
     const setting = fs.existsSync(path.join(PROGRAM_DIR, 'setting.json'))
         ? JSON.parse(fs.readFileSync(path.join(PROGRAM_DIR, 'setting.json')).toString())
@@ -311,32 +376,78 @@ ipcMain.on('drag-start', (event, filePath) => {
     })
     event.sender.send('drag-finished')
 })
-
-interface NotificationOption {
-    title: string,
-    body: string
-}
-
 ipcMain.on('notification-show', (event, args: [NotificationOption, string]) => {
     const notification = new Notification(args[0])
-    notification.on("click", (event) => {
-        shell.showItemInFolder(process.platform === "win32" ? args[1].replace('/', '\\') : args[1])
-        require('child_process').exec(`explorer.exe /select,${args[1]}`)
+    let targetPath = args[1];
+    if (process.platform.includes("win32")) {
+        while (targetPath.includes('/')) {
+            targetPath = targetPath.replace('/', '\\')
+        }
+    }
+    notification.on("click", () => {
+        shell.showItemInFolder(targetPath)
     })
     notification.show()
 })
-
 ipcMain.on("get-core-logs", (event) => {
     event.sender.send('get-core-logs-result', CoreLogs)
 })
-ipcMain.on("get-core-version", (event) => {
-    event.sender.send("get-core-version-result", CoreVersion)
+ipcMain.on("get-core-exist", (event) => {
+    event.returnValue = fs.existsSync(CoreBin);
+    event.sender.send("get-core-exist-result",)
 })
 
+ipcMain.on("get-core-url", (event) => {
+    event.returnValue = `127.0.0.1:${CorePort}`
+})
+ipcMain.on("get-core-version", (event) => {
+    if (CoreLatestVersion == null)
+        axios.get("https://api.github.com/repos/Icexbb/SekaiSubtitle-core/releases").then(resp => {
+            CoreLatestVersion = resp.data[0].tag_name;
+            event.sender.send("get-core-version-result", [CoreVersion, CoreLatestVersion])
+        })
+    else
+        event.sender.send("get-core-version-result", [CoreVersion, CoreLatestVersion])
+})
 ipcMain.on("get-core-alive", (event) => {
     event.sender.send("get-core-alive-result", CoreConnected)
 })
-
+ipcMain.on("get-core-path", (event) => {
+    let CorePath = CoreBin;
+    if (process.platform.includes("win32")) {
+        while (CorePath.includes('/')) {
+            CorePath = CorePath.replace('/', '\\')
+        }
+    }
+    if (!fs.existsSync(path.dirname(CorePath))) fs.mkdirSync(path.dirname(CorePath))
+    event.returnValue = CorePath
+})
 ipcMain.on("get-app-version", (event) => {
-    event.sender.send("get-app-version-result", AppVersion)
+    if (CoreLatestVersion == null)
+        axios.get("https://api.github.com/repos/Icexbb/SekaiSubtitle-electron/releases").then(resp => {
+            AppLatestVersion = resp.data[0].tag_name;
+            event.sender.send("get-app-version-result", [AppVersion, AppLatestVersion])
+        })
+    else
+        event.sender.send("get-app-version-result", [AppVersion, AppLatestVersion])
+})
+ipcMain.on("restart-core", (event) => {
+    try {
+        CoreAliveSocket.close()
+        CoreProcess.kill()
+        CoreProcess = null;
+    } catch (e) {
+    }
+    initCore();
+    event.sender.send("restart-core-result", CoreConnected)
+    event.returnValue = CoreConnected
+})
+ipcMain.on("stop-core", (event, args) => {
+    try {
+        CoreAliveSocket.close()
+        CoreProcess.kill()
+        CoreProcess = null;
+    } catch (e) {
+        console.log(e)
+    }
 })

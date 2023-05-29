@@ -1,6 +1,6 @@
 {
   "name": "sekaisubtitle-electron",
-  "version": "0.9.9-rc.2",
+  "version": "0.9.9-rc.3",
   "main": "dist-electron/main/index.js",
   "description": "",
   "author": "XBB <icexb_baka@163.com>",
@@ -20,7 +20,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc --noEmit && vite build && electron-builder",
+    "build": "vue-tsc --noEmit && vite build && electron-builder --config electron-builder.without-core.json && electron-builder --config electron-builder.with-core.json",
     "preview": "vite preview"
   },
   "devDependencies": {
@@ -51,48 +51,13 @@
   "dependencies": {
     "axios": "^1.4.0",
     "font-list": "^1.4.5",
+    "iconv-lite": "^0.6.3",
+    "node-fetch": "^3.3.1",
+    "node-ffprobe": "^3.0.0",
+    "semver": "^7.5.1",
+    "socks-proxy-agent": "^8.0.1",
     "vue-axios": "^3.5.2",
     "vue-router": "^4.1.6",
     "ws": "^8.13.0"
-  },
-  "build": {
-    "appId": "indi.icexbb.sekaisubtitle",
-    "productName": "Sekai Subtitle",
-    "directories": {
-      "output": "release/${version}-${platform}"
-    },
-    "files": [
-      "package.json",
-      "dist/**/*",
-      "dist-electron/**/*"
-    ],
-    "win": {
-      "target": "nsis",
-      "icon": "public/favicon.ico",
-      "artifactName": "${productName}_setup_${version}.${ext}",
-      "extraResources": [
-        {
-          "from": "./extra/core.exe",
-          "to": "../resources/core.exe"
-        }
-      ]
-    },
-    "mac": {
-      "icon": "public/favicon.icns",
-      "artifactName": "${productName}_setup_${version}.${ext}",
-      "target": "dmg",
-      "extraResources": [
-        {
-          "from": "./extra/core.bin",
-          "to": "../resources/core.bin"
-        }
-      ]
-    },
-    "nsis": {
-      "oneClick": false,
-      "perMachine": false,
-      "allowToChangeInstallationDirectory": true,
-      "deleteAppDataOnUninstall": true
-    }
   }
 }

@@ -104,9 +104,9 @@
                                 </n-space>
                             </n-card>
                             <n-card size="small">
-                                <n-space justify="space-between" :wrap-item="false">
+                                <n-space :wrap="false" justify="space-between" :wrap-item="false">
                                     <span style="justify-content:center;height: 100%;">打字机特效时间</span>
-                                    <n-input-group style="width: min-content;">
+                                    <n-space justify="end" style="width: min-content;">
                                         <n-input-number
                                                 style="min-width: 180px;"
                                                 v-model:value="this.config_type_interval_1"
@@ -123,7 +123,7 @@
                                             <template #prefix>文字间隔</template>
                                             <template #suffix>ms</template>
                                         </n-input-number>
-                                    </n-input-group>
+                                    </n-space>
                                 </n-space>
 
                             </n-card>
@@ -397,7 +397,7 @@ export default defineComponent({
             }
         }
     },
-    inject: ["modalActiveControl"],
+    inject: ["modalActiveControl", "newTask"],
     components: {Dropbox},
     data() {
         return {
@@ -455,7 +455,6 @@ export default defineComponent({
             ipcRenderer.once('selected-video', (e, result) => {
                 if (!result.canceled) {
                     this.config_video_file = result.filePaths[0]
-                    this.getVideoInfo()
                 }
             });
         },
@@ -505,16 +504,14 @@ export default defineComponent({
                     duration: duration,
                     debug: false,
                 }
-                this.axios.post(`http://localhost:50000/subtitle/new?runAfterCreate=${this.runAfterCreate}`, ProcessConfig).then()
+                this.newTask(ProcessConfig,this.runAfterCreate)
                 this.modalClose()
-
-
             }
         },
         getVideoInfo() {
             this.video_info = {}
             this.video_frame_count = 0
-            this.axios.get(`http://localhost:50000/subtitle/videoInfo?video_file=${this.config_video_file}`).then((data) => {
+            this.axios.get(`http://${ipcRenderer.sendSync("get-core-url")}/subtitle/videoInfo?video_file=${this.config_video_file}`).then((data) => {
                 this.video_info = data.data.data
                 this.video_frame_count = this.video_info['frameCount']
                 this.config_duration = [0, this.video_frame_count]
@@ -620,7 +617,6 @@ export default defineComponent({
                 (['.mp4', '.avi', '.mkv', '.wmv']).forEach(ext => {
                     if (file['name'].endsWith(ext))
                         this.config_video_file = file['path'];
-                    this.getVideoInfo()
                 });
                 (['.json', '.asset']).forEach(ext => {
                     if (file['name'].endsWith(ext))
@@ -674,6 +670,11 @@ export default defineComponent({
             this.CustomFontSettable = args['SubtitleCustomFontSettable']
         })
     },
+    watch: {
+        config_video_file: function () {
+            if (this.config_video_file.length) this.getVideoInfo();
+        }
+    }
 })
 </script>
 <style scoped>

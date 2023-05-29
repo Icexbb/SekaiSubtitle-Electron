@@ -67,13 +67,14 @@
 import {defineComponent, ref} from "vue";
 import SubtitleTask from "../components/SubtitleTask.vue";
 import SubtitleEmit from "../components/SubtitleEmit.vue";
+import {ipcRenderer} from "electron";
 
 export default defineComponent({
     components: {SubtitleEmit, SubtitleTask},
     data() {
         return {
             webSocket: null,
-            url: 'ws://localhost:50000/subtitle/tasks',
+            url: `ws://${ipcRenderer.sendSync("get-core-url")}/subtitle/tasks`,
             taskList: ref({}),
             living: ref(true),
             modalActive: false
@@ -84,6 +85,13 @@ export default defineComponent({
             modalActiveControl: () => {
                 this.modalActive = false
             },
+            newTask: (config, runAfterCreate) => {
+                let data = JSON.stringify({type: 'new', data: config, runAfterCreate: runAfterCreate})
+                if (this.webSocket) this.webSocket.send(data);
+            },
+            GeneralTasksControl: (operate, taskId: string) => {
+                this.tasksControl(operate, [taskId])
+            }
         };
     },
     methods: {
@@ -99,11 +107,12 @@ export default defineComponent({
                 console.log('websocket连接失败', err);
             };
         },
-
         webSocketOnMessage(res) {
             const data = JSON.parse(res.data)
             if (data['type'] === 'tasks') this.taskList = data['data']
-            this.webSocket.send(JSON.stringify({type: "alive"}));
+            setTimeout(() => {
+                if (this.webSocket) this.webSocket.send(JSON.stringify({type: "alive"}));
+            }, 100)
         },
         webSocketOnClose() {
             if (this.webSocket)
@@ -114,17 +123,17 @@ export default defineComponent({
                 this.taskList = {}
             }
         },
-        tasksControl(operate) {
-            Object.keys(this.taskList).forEach(
+        tasksControl(operate, taskList: string[] | null = null) {
+            if (taskList == null)
+                taskList = Object.keys(this.taskList)
+            taskList.forEach(
                 (key) => {
-                    this.axios.post(`http://localhost:50000/subtitle/${operate}/${key}`).then()
+                    if (this.webSocket) this.webSocket.send(JSON.stringify({type: operate, data: key}));
                 }
             )
-
         }
     },
     created() {
-        // 页面打开就建立连接，根据业务需要
         if (!this.webSocket) this.initSocket();
     },
     unmounted() {

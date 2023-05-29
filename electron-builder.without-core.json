@@ -1,0 +1,23 @@
+{
+  "appId": "org.icexbb.sekaisubtitle",
+  "productName": "Sekai Subtitle",
+  "directories": {
+    "output": "release/${version}-${platform}"
+  },
+  "files": [
+    "package.json",
+    "dist/**/*",
+    "dist-electron/**/*"
+  ],
+  "win": {
+    "target": "nsis",
+    "icon": "public/favicon.ico",
+    "artifactName": "${productName}_${version}_setup.${ext}"
+  },
+  "nsis": {
+    "oneClick": false,
+    "perMachine": false,
+    "allowToChangeInstallationDirectory": true,
+    "deleteAppDataOnUninstall": true
+  }
+}

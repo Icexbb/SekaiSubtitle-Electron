@@ -1,18 +1,21 @@
+<template>
+    <n-card style="height: 100%;">
+        <n-space style="height: 100%;" vertical justify="center">
+            <n-empty>暂未完成</n-empty>
+        </n-space>
+    </n-card>
+</template>
 <script lang="ts">
 import {defineComponent} from 'vue'
 
 export default defineComponent({
-    name: "Translate"
+    name: "Translate",
+    data() {
+        return {}
+    },
+    methods: {},
 })
 </script>
-
-<template>
-    <n-scrollbar>
-        <n-space vertical align="center">
-            <n-empty class="full-height"></n-empty>
-        </n-space>
-    </n-scrollbar>
-</template>
 
 <style scoped>
 

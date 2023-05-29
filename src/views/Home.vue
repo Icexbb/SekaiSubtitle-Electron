@@ -4,70 +4,105 @@
             :segmented="false" class="full-height">
         <template #header><span> </span></template>
         <template #header-extra>
-            <n-popover trigger="hover">
-                <template #trigger>
-                    <n-button :type="this.coreConnected?'success':'tertiary'" quaternary strong
-                              @click="this.showLog">
-                        <template #icon>
-                            <n-icon>
-                                <PlugConnected20Filled v-if="this.coreConnected"/>
-                                <PlugDisconnected20Filled v-else/>
-                            </n-icon>
-                        </template>
-                        <template #default>
-                            内核版本号 {{ this.coreVersion }}
-                        </template>
-                    </n-button>
-                </template>
-                <template #default>
-                    显示内核日志
-                </template>
-            </n-popover>
-            <n-popover trigger="hover">
-                <template #trigger>
-                    <n-button type="tertiary" quaternary strong @click="this.showHomePage">
-                        <template #icon>
-                            <n-icon>
-                                <Apps20Regular/>
-                            </n-icon>
-                        </template>
-                        <template #default>
-                            程序版本号 {{ this.frontVersion }}
-                        </template>
-                    </n-button>
-                </template>
-                <template #default>
-                    前往GitHub项目页面
-                </template>
-            </n-popover>
+            <n-space v-if="!this.updating">
+                <n-popover trigger="hover">
+                    <template #trigger>
+                        <n-button
+                                :type="this.coreNeedUpdate?'warning':(this.coreConnected?'success':'tertiary')"
+                                quaternary strong @click.left="this.showLog">
+                            <template #icon>
+                                <n-badge v-if="this.coreNeedUpdate">
+                                    <n-icon>
+                                        <PlugConnected20Filled v-if="this.coreConnected"/>
+                                        <PlugDisconnected20Filled v-else/>
+                                    </n-icon>
+                                </n-badge>
+                                <n-icon v-else>
+                                    <PlugConnected20Filled v-if="this.coreConnected"/>
+                                    <PlugDisconnected20Filled v-else/>
+                                </n-icon>
+                            </template>
+                            <template #default>
+                                内核版本 {{ this.coreVersion }}
+                            </template>
+                        </n-button>
+                    </template>
+                    <template #default>
+                        显示内核操作台
+                    </template>
+                </n-popover>
+                <n-popover trigger="hover">
+                    <template #trigger>
+                        <n-button :type="this.appNeedUpdate?'warning':'tertiary'"
+                                  quaternary strong @click="this.showHomePage">
+                            <template #icon>
+                                <n-badge v-if="this.appNeedUpdate">
+                                    <n-icon>
+                                        <Apps20Regular/>
+                                    </n-icon>
+                                </n-badge>
+                                <n-icon v-else>
+                                    <Apps20Regular/>
+                                </n-icon>
+                            </template>
+                            <template #default>
+                                程序版本 {{ this.appVersion }}
+                            </template>
+                        </n-button>
+                    </template>
+                    <template #default>
+                        前往GitHub项目页面
+                    </template>
+                </n-popover>
+            </n-space>
         </template>
         <template #default>
-            <n-space vertical justify="center"
+            <n-space v-if="!this.updating" vertical justify="center"
                      style="justify-content: center;align-items: center;display:flex;text-align: center;height: 100%;"
             >
-                <img class="home-logo" src="../assets/icon.png" alt="Sekai Subtitle" disabled>
+                <img class="home-logo" src="../assets/icon.png" alt="Sekai Subtitle" disabled :draggable="false">
                 <n-gradient-text disabled
                                  :gradient="this.titleGradient" font-size="32">
                     Sekai Subtitle
                 </n-gradient-text>
                 <n-divider style="min-width: 250px;"/>
                 <n-space justify="center">
-                    <n-button @click="()=>{this.$router.push('/subtitle')}">
+                    <n-button @click="()=>{this.$router.push('/subtitle')}" :disabled="!this.coreConnected">
                         自动轴机
                     </n-button>
                     <n-button @click="()=>{this.$router.push('/download')}">
                         数据下载
                     </n-button>
-                    <n-button @click="()=>{this.$router.push('/translate')}" disabled>
+                    <n-button @click="()=>{this.$router.push('/translate')}">
                         文档翻译
                     </n-button>
                 </n-space>
             </n-space>
+            <n-space v-else vertical justify="center"
+                     style="justify-content: center;align-items: center;display:flex;text-align: center;height: 100%;"
+            >
+                <n-progress type="circle" :percentage="this.updateProgress" style="width: 150px;">
+                    <img class="home-logo" src="../assets/icon.png" alt="Sekai Subtitle" disabled :draggable="false">
+                </n-progress>
+                <n-gradient-text :font-size="25">
+                    {{ this.updateProgress.toFixed(1) }}%{{ "\t" }}{{ this.downloadRate }}
+                </n-gradient-text>
+            </n-space>
         </template>
     </n-card>
-    <n-modal v-model:show="this.showModal">
-        <n-card style="width: 80%" title="内核日志" role="dialog" aria-modal="true">
-            <n-log :log=" this.logs.join('\n') "/>
+    <n-modal :show="this.showModal" closable>
+        <n-card style="width: 80%" title="内核日志" role="dialog" aria-modal="true" closable
+                @close="this.showModal=false">
+            <n-scrollbar style=" max-height: 300px">
+                <n-log style="height: max-content; max-height: 300px;" :log="this.logs.join('\n')"/>
+            </n-scrollbar>
+            <template #action>
+                <n-space justify="end">
+                    <n-button @click="this.getLatestCore" v-if="this.coreNeedUpdate">下载最新内核</n-button>
+                    <n-button @click="this.showCorePath">打开内核文件夹</n-button>
+                    <n-button @click="this.showCorePage">打开内核发布页</n-button>
+                </n-space>
+            </template>
         </n-card>
     </n-modal>
 </template>
@@ -77,6 +112,10 @@ import {defineComponent} from "vue";
 import {ipcRenderer} from "electron";
 import {PlugConnected20Filled, PlugDisconnected20Filled, Apps20Regular} from "@vicons/fluent"
 import {shell} from "electron"
+import path from "path";
+import * as semver from "semver"
+import {downloadLatestCore} from "../utils/core";
+
 
 export default defineComponent({
     components: {PlugConnected20Filled, PlugDisconnected20Filled, Apps20Regular},
@@ -84,20 +123,51 @@ export default defineComponent({
         return {
             titleGradient: "linear-gradient(90deg, rgb(255,90,87) 0%,rgb(251,204,43) 33%, rgb(19,201,255) 66%, rgb(70,102,255) 100%)",
             coreVersion: "",
-            frontVersion: "",
+            latestCoreVersion: "",
+            coreNeedUpdate: false,
+            appVersion: "",
+            latestAppVersion: "",
+            appNeedUpdate: false,
             coreConnected: false,
             showModal: false,
-            logs: []
+            logs: [],
+            updating: false,
+
+            updateProgress: 0,
+            downloadRate: ""
         }
-    }, methods: {
+    },
+    methods: {
         getAppVersion() {
             ipcRenderer.send("get-core-version")
-            ipcRenderer.once("get-core-version-result", (event, args) => {
-                this.coreVersion = args
+            ipcRenderer.on("get-core-version-result", (event, args) => {
+                try {
+                    this.coreNeedUpdate = false
+                    this.coreVersion = args[0]
+                    if (this.coreVersion) {
+                        this.latestCoreVersion = args[1]
+                        if (semver.gt(this.latestCoreVersion, this.coreVersion, true)) {
+                            this.coreNeedUpdate = true
+                        }
+                    } else {
+                        this.coreVersion = "未安装"
+                        this.coreNeedUpdate = true
+                    }
+                } catch (e) {
+                    this.coreNeedUpdate = true
+                }
             })
             ipcRenderer.send("get-app-version")
-            ipcRenderer.once("get-app-version-result", (event, args) => {
-                this.frontVersion = "v" + args
+            ipcRenderer.on("get-app-version-result", (event, args) => {
+                try {
+                    this.appVersion = 'v' + args[0]
+                    this.latestAppVersion = args[1]
+                    if (semver.gt(this.latestAppVersion, this.appVersion, true)) {
+                        this.appNeedUpdate = true
+                    }
+                } catch (e) {
+                    this.appNeedUpdate = true
+                }
             })
 
         },
@@ -110,22 +180,47 @@ export default defineComponent({
             })
         },
         setTimeoutAlive() {
+            ipcRenderer.send("get-core-alive");
             setTimeout(() => {
-                ipcRenderer.send("get-core-alive");
                 this.setTimeoutAlive();
             }, 1000);
-        }, showHomePage() {
+        },
+        showHomePage() {
             shell.openExternal("https://github.com/Icexbb/SekaiSubtitle-Electron")
+        },
+        showCorePath() {
+            shell.openPath(path.dirname(ipcRenderer.sendSync("get-core-path")))
+        },
+        showCorePage() {
+            shell.openExternal("https://github.com/Icexbb/SekaiSubtitle-Core/releases/latest")
+        },
+        getLatestCore() {
+            this.showModal = false;
+            this.updating = true;
+            const ProgressShow = (event) => {
+                this.updateProgress = event.progress * 100
+                let speed = event.rate / 1024
+                this.downloadRate = `${speed}KB/s`
+                if (speed > 1024) this.downloadRate = `${speed / 1024}MB/s`
+            }
+            downloadLatestCore(ProgressShow).catch((err) => {
+                alert(`在下载最新内核时发生错误：${err}\n请重试或者手动下载替换内核。`)
+            }).finally(() => {
+                this.updating = false;
+                ipcRenderer.send("get-core-version")
+            })
         }
     },
-    created() {
+    mounted() {
         this.getAppVersion();
-        ipcRenderer.send("get-core-alive");
         this.setTimeoutAlive();
         ipcRenderer.on('get-core-alive-result', (event, args) => {
             this.coreConnected = args
         })
     },
+    unmounted() {
+        ipcRenderer.removeAllListeners("get-core-version-result")
+    }
 })
 </script>
 <style scoped>

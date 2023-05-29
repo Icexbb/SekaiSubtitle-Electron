@@ -29,9 +29,12 @@ import {defineComponent, h, ref} from "vue";
 import {NIcon} from "naive-ui";
 import {RouterLink} from "vue-router";
 import {HomeRound, SubtitlesRound, DownloadRound, SettingsRound, TranslateRound} from "@vicons/material"
+import {ipcRenderer} from "electron";
 
-function renderIcon(icon) {
-    return () => h(NIcon, null, {default: () => h(icon)});
+let coreExist: boolean = ipcRenderer.sendSync("get-core-exist")
+
+function renderIcon(icon, props?) {
+    return () => h(NIcon, props, {default: () => h(icon)});
 }
 
 const menuOptions = [
@@ -45,10 +48,13 @@ const menuOptions = [
     {key: 'divider-1', type: 'divider'},
     {
         label: () => h(
-            RouterLink, {to: {name: "Subtitle"}}, {default: () => "自动轴机"}
+            RouterLink,
+            coreExist ? {to: {name: "Subtitle"}} : {to: {name: ""}, disabled: !coreExist},
+            {default: () => "自动轴机"}
         ),
         key: "Subtitle",
-        icon: renderIcon(SubtitlesRound)
+        icon: renderIcon(SubtitlesRound, {disabled: !coreExist}),
+        disabled: !coreExist
     },
     {
         label: () => h(
@@ -57,12 +63,11 @@ const menuOptions = [
         key: "Download",
         icon: renderIcon(DownloadRound)
     }, {
-        label: "剧情翻译",
-        //     () => h(
-        //     RouterLink, {to: {name: "Translate"}}, {default: () => "剧情翻译"}
-        // ),
+        label:
+            () => h(
+                RouterLink, {to: {name: "Translate"}}, {default: () => "剧情翻译"}
+            ),
         key: "Translate",
-        disabled: true,
         icon: renderIcon(TranslateRound)
     },
     {key: 'divider-2', type: 'divider'},
@@ -84,5 +89,4 @@ export default defineComponent({
 })
 </script>
 <style>
-
 </style>
