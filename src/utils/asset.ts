@@ -1,6 +1,7 @@
 import path from "path";
 import * as fs from 'fs';
 import {area_name, chara_name, unit_name} from "./constants";
+import {ipcRenderer} from "electron";
 
 interface SourceList {
     events: string
@@ -41,11 +42,7 @@ function update_source_best(): SourceList {
     }
 }
 
-const USER_HOME = process.env.HOME || process.env.USERPROFILE
-export const AssetDir: string = process.platform === 'win32'
-    ? path.join(String(USER_HOME), 'Documents', 'SekaiSubtitle', "data")
-    : path.join(String(USER_HOME), 'SekaiSubtitle', "data")
-
+export const AssetDir: string = ipcRenderer.sendSync("get-asset-path")
 
 function download_list(source: string): Promise<any[]> {
     const source_list = source == "ai" ? update_source_ai() : update_source_best()

@@ -2,17 +2,15 @@
     <n-popover trigger="hover" :disabled="!Boolean(this.downloaded)" style="user-select: none;">
         <template #trigger>
             <n-tag round closable style="user-select: none;"
+                   :draggable="this.downloaded" @dragstart="this.dragOut" @dragover.prevent
                    :type="Boolean(this.downloaded)?'success':this.downloading?'warning':'info'"
                    @close="this.deleteSelf">
                 <template #default>
-                    <span
-                            :draggable="true" @dblclick="this.showFile"
-                            @dragstart="this.dragOut" @dragover.prevent
-                    >{{ this.name }}</span>
+                    <span @dblclick="this.showFile">{{ this.name }}</span>
                 </template>
                 <template #icon>
                     <n-button :bordered="false" style="padding-inline: 2px" success>
-                        <n-icon @click="this.download">
+                        <n-icon @click="this.checkAndDownload">
                             <DownloadRound v-if="(!this.downloaded)&&(!this.downloading)"/>
                             <DownloadingRound v-if="(!this.downloaded)&&this.downloading"/>
                             <DownloadDoneRound v-if="this.downloaded"/>
@@ -44,16 +42,18 @@ export default defineComponent({
     updated() {
         this.updateStatus()
     },
+    unmounted() {
+        this.setStatus()
+    },
     data() {
-        // @ts-ignore
         let task = useDownloadTasksStore().tasks[this.hash as string]
         return {
             icon: DownloadRound,
-            name: task.taskName,
-            url: task.taskUrl,
-            filepath: task.taskTarget,
-            downloading: task.taskDownloading,
-            downloaded: task.taskDownloaded,
+            name: task.taskName as string,
+            url: task.taskUrl as string,
+            filepath: task.taskTarget as string,
+            downloading: task.taskDownloading as boolean,
+            downloaded: task.taskDownloaded as boolean,
         }
     },
     methods: {
@@ -62,37 +62,44 @@ export default defineComponent({
             useDownloadTasksStore().deleteTask(this.hash)
         },
         checkAndDownload() {
+            console.table(useDownloadTasksStore().tasks[this.hash])
             if ((!this.downloaded) && (!this.downloading)) this.download();
         },
         updateStatus() {
             this.downloading = useDownloadTasksStore().tasks[this.hash].taskDownloading;
             this.downloaded = useDownloadTasksStore().tasks[this.hash].taskDownloaded;
         },
+        setStatus() {
+            if (useDownloadTasksStore().tasks[this.hash]) {
+                useDownloadTasksStore().tasks[this.hash].taskDownloading = this.downloading;
+                useDownloadTasksStore().tasks[this.hash].taskDownloaded = this.downloaded;
+            }
+        },
         download() {
-            useDownloadTasksStore().tasks[this.hash].taskDownloading = true
-            this.updateStatus()
+            this.downloading = true
+            this.setStatus()
 
             this.axios.get(this.url).then((response) => {
                 fs.writeFileSync(this.filepath, JSON.stringify(response.data))
-                useDownloadTasksStore().tasks[this.hash].taskDownloaded = true
-                useDownloadTasksStore().tasks[this.hash].taskDownloading = false
-                this.updateStatus()
+                this.downloaded = true
+                this.downloading = false
+                this.setStatus()
             })
         },
         showFile() {
-            if (Boolean(this.filepath) && this.status) {
-                require('child_process').exec(`explorer.exe /select,${this.filepath}`)
+            this.filepath = this.filepath.replaceAll("/", "\\")
+            if (Boolean(this.filepath.length) && this.downloaded) {
+                require("electron").shell.showItemInFolder(this.filepath)
             }
-        }
-        ,
-        dragOut(event) {
+        },
+        dragOut(event: DragEvent) {
             event.preventDefault()
             ipcRenderer.send('drag-start', this.filepath)
             ipcRenderer.once('drag-finished', () => {
                 this.deleteSelf()
             })
-        }
-        ,
+        },
+
     },
 
 })

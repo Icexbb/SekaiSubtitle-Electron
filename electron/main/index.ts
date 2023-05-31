@@ -64,18 +64,21 @@ function initCoreVersion() {
         CoreVersion = cp.execSync(`"${CoreBin}" -v`).toString()
     }
     if (fs.existsSync(CoreBinPacked)) {
-        let CorePackedVersion = cp.execSync(`"${CoreBinPacked}" -v`).toString()
-        if (!fs.existsSync(CoreBin)) {
-            fs.cpSync(CoreBinPacked, CoreBin);
-            CoreVersion = CorePackedVersion;
-        } else if (semver.gt(CorePackedVersion, CoreVersion, true)) {
-            fs.cpSync(CoreBinPacked, CoreBin);
-            CoreVersion = CorePackedVersion;
-        } else if (fs.statSync(CoreBinPacked).mtimeMs > fs.statSync(CoreBin).mtimeMs) {
-            fs.cpSync(CoreBinPacked, CoreBin);
-            CoreVersion = CorePackedVersion;
-        }
-        if (app.isPackaged) fs.unlinkSync(CoreBinPacked);
+        let CorePackedVersion;
+        cp.exec(`"${CoreBinPacked}" -v`, (error, stdout, stderr) => {
+            CorePackedVersion = stdout;
+            let replace = false;
+            if (!fs.existsSync(CoreBin)) replace = true;
+            else if (semver.gt(CorePackedVersion, CoreVersion, true)) replace = true;
+            else if (fs.statSync(CoreBinPacked).mtimeMs > fs.statSync(CoreBin).mtimeMs) replace = true;
+
+            if (replace) {
+                CoreVersion = CorePackedVersion;
+                fs.cp(CoreBinPacked, CoreBin, (err) => {
+                    if (err == null) if (app.isPackaged) fs.unlinkSync(CoreBinPacked);
+                });
+            }
+        })
     }
 }
 
@@ -209,12 +212,12 @@ function initCore() {
 }
 
 
-app.whenReady().then(createWindow).then(() => {
+app.whenReady().then(createWindow).then(initCore).then(() => {
     const setting = fs.existsSync(path.join(PROGRAM_DIR, 'setting.json'))
         ? JSON.parse(fs.readFileSync(path.join(PROGRAM_DIR, 'setting.json')).toString())
         : {}
-    win.webContents.session.setProxy({proxyRules: setting['proxy']}).then();
-}).then(initCore)
+    setProxy(setting)
+})
 
 app.on('window-all-closed', () => {
     running = false
@@ -265,11 +268,9 @@ ipcMain.handle('open-win', (_, arg) => {
         },
     })
     if (process.env.VITE_DEV_SERVER_URL) {
-        childWindow.loadURL(`${url}#${arg}`).then(() => {
-        })
+        childWindow.loadURL(`${url}#${arg}`).then()
     } else {
-        childWindow.loadFile(indexHtml, {hash: arg}).then(() => {
-        })
+        childWindow.loadFile(indexHtml, {hash: arg}).then()
     }
 })
 
@@ -342,14 +343,26 @@ ipcMain.on('save-setting', (event, args) => {
     if (!fs.existsSync(PROGRAM_DIR)) fs.mkdirSync(PROGRAM_DIR)
 
     if (fs.existsSync(PROGRAM_DIR)) {
-        fs.writeFile(path.join(PROGRAM_DIR, 'setting.json'), JSON.stringify(args), err => {
-            if (err) alert(`设置文件保存失败:${err}`)
-            win.webContents.session.setProxy({proxyRules: args['proxy']}).then();
-        })
+        fs.writeFileSync(path.join(PROGRAM_DIR, 'setting.json'), JSON.stringify(args))
+        setProxy(args)
     } else {
         alert(`配置文件夹创建失败！`)
     }
 })
+
+function setProxy(setting) {
+    switch (setting['proxy']) {
+        case null:
+            win.webContents.session.setProxy({mode: 'direct'}).then();
+            break;
+        case "system":
+            win.webContents.session.setProxy({mode: 'system'}).then();
+            break;
+        default:
+            win.webContents.session.setProxy({mode: 'fixed_servers', proxyRules: setting['proxy']}).then();
+    }
+}
+
 ipcMain.on('get-setting', (event, args) => {
     const setting = fs.existsSync(path.join(PROGRAM_DIR, 'setting.json'))
         ? JSON.parse(fs.readFileSync(path.join(PROGRAM_DIR, 'setting.json')).toString())
@@ -421,6 +434,19 @@ ipcMain.on("get-core-path", (event) => {
     }
     if (!fs.existsSync(path.dirname(CorePath))) fs.mkdirSync(path.dirname(CorePath))
     event.returnValue = CorePath
+})
+ipcMain.on("get-asset-path", (event) => {
+    let AssetDir: string = process.platform === 'win32'
+        ? path.join(String(USER_HOME), 'Documents', 'SekaiSubtitle', "data")
+        : path.join(String(USER_HOME), 'SekaiSubtitle', "data")
+
+    if (process.platform.includes("win32")) {
+        while (AssetDir.includes('/')) {
+            AssetDir = AssetDir.replace('/', '\\')
+        }
+    }
+    if (!fs.existsSync(AssetDir)) fs.mkdirSync(AssetDir)
+    event.returnValue = AssetDir
 })
 ipcMain.on("get-app-version", (event) => {
     if (CoreLatestVersion == null)

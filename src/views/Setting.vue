@@ -3,7 +3,14 @@
         <n-space vertical item-style="padding: 1em">
             <n-page-header class="header" title="设置">
                 <template #extra>
-                    <n-button @click="this.saveConfig">应用设置</n-button>
+                    <n-popover :show="this.settingSaved">
+                        <template #trigger>
+                            <n-button @click="this.saveConfig">应用设置</n-button>
+                        </template>
+                        <template #default>
+                            设置已保存
+                        </template>
+                    </n-popover>
                 </template>
             </n-page-header>
             <n-collapse accordion default-expanded-names="自动轴机">
@@ -14,10 +21,12 @@
                             <n-input-group style="width: min-content">
                                 <n-select style="width: 100px;" :options="this.proxySchemeOption"
                                           v-model:value="this.settingProxyScheme"/>
-                                <n-input v-model:value="this.settingProxyHost" v-if="this.settingProxyScheme"
+                                <n-input v-model:value="this.settingProxyHost"
+                                         v-if="this.settingProxyScheme!='none'&&this.settingProxyScheme!='system'"
                                          style="width: 120px;height: 34px;"/>
                                 <n-input-number
-                                        style="width: 100px;" :min="1" :max="65535" v-if="this.settingProxyScheme"
+                                        style="width: 100px;" :min="1" :max="65535"
+                                        v-if="this.settingProxyScheme!='none'&&this.settingProxyScheme!='system'"
                                         v-model:value="this.settingProxyPort"
                                         @wheel="e=>{
                                             this.settingProxyPort=Math.min(Math.max(1,this.settingProxyPort+Math.sign(e.deltaY)),65535)
@@ -85,9 +94,12 @@ import {defineComponent} from 'vue'
 import {ipcRenderer} from "electron";
 
 const proxySchemeOption = [
-    {label: '无', value: ''},
+    {label: '无', value: 'none'},
+    {label: 'http://', value: 'http'},
+    {label: 'https://', value: 'https'},
+    {label: 'socks4://', value: 'socks4'},
     {label: 'socks5://', value: 'socks5'},
-    {label: 'http://', value: 'http'}
+    {label: '系统代理', value: 'system'},
 ]
 export default defineComponent({
     name: "Setting",
@@ -104,23 +116,35 @@ export default defineComponent({
     },
     data() {
         return {
-            settingProxyScheme: 'socks5://',
-            settingProxyHost: 'localhost',
+            settingProxyScheme: '',
+            settingProxyHost: '127.0.0.1',
             settingProxyPort: 1080,
             settingSubtitleRunAfterCreate: false,
             settingSubtitleAlwaysOverwrite: false,
             settingSubtitleTyperFade: 50,
             settingSubtitleTyperInterval: 80,
             settingSubtitleCustomFontSettable: false,
+            settingSaved: false
         }
     },
     methods: {
         createSettingConfig() {
+            let proxy: string | null;
+            switch (this.settingProxyScheme) {
+                case "none":
+                    proxy = null;
+                    break;
+                case "system":
+                    proxy = "system";
+                    break;
+                default:
+                    proxy = `${this.settingProxyScheme}://${this.settingProxyHost}:${this.settingProxyPort}`
+            }
             return {
                 ProxyScheme: this.settingProxyScheme,
                 ProxyHost: this.settingProxyHost,
                 ProxyPort: this.settingProxyPort,
-                proxy: this.settingProxyScheme.length ? `${this.settingProxyScheme}://${this.settingProxyHost}:${this.settingProxyPort}` : ``,
+                proxy: proxy,
                 SubtitleAlwaysOverwrite: this.settingSubtitleAlwaysOverwrite,
                 SubtitleRunAfterCreate: this.settingSubtitleRunAfterCreate,
                 SubtitleTyperFade: this.settingSubtitleTyperFade,
@@ -130,6 +154,10 @@ export default defineComponent({
         },
         saveConfig() {
             ipcRenderer.send('save-setting', this.createSettingConfig())
+            this.settingSaved = true
+            setTimeout(() => {
+                this.settingSaved = false
+            }, 3000)
         },
         reloadConfig() {
             ipcRenderer.send('get-setting')

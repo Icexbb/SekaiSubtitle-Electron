@@ -59,7 +59,23 @@
             </n-space>
             <n-card style="height: max-content;">
                 <template #header>
-                    下载任务列表
+                    <n-space>
+                        <n-text>下载任务列表</n-text>
+                        <n-popover :trigger="'hover'">
+                            <template #trigger>
+                                <n-icon>
+                                    <QuestionCircle32Filled/>
+                                </n-icon>
+                            </template>
+                            <template #default>
+                            <span>
+                                双击任务名称显示文件打开文件夹<br/>
+                                拖动任务到文件夹移动下载文件
+                            </span>
+                            </template>
+                        </n-popover>
+                    </n-space>
+
                 </template>
                 <template #default>
                     <n-space>
@@ -84,6 +100,9 @@
                         <template #default>
                             <span>{{ this.proxy }}</span>
                         </template>
+                        <template #header>
+                            本机IP：{{this.currentIpv4}} {{this.currentIpv6}}
+                        </template>
                     </n-popover>
                 </template>
             </n-card>
@@ -100,6 +119,7 @@ import {useDownloadTasksStore, DownloadTaskInfo} from "../stores/DownloadTasks";
 import path from "path";
 import {ipcRenderer} from "electron";
 import {chara_id} from "../utils/constants";
+import {QuestionCircle32Filled} from "@vicons/fluent"
 
 const dataSourceOpt = [
     {label: 'https://sekai.best/', value: "best",},
@@ -107,7 +127,7 @@ const dataSourceOpt = [
 ]
 
 export default defineComponent({
-    components: {DownloadRequest, ServerProxy},
+    components: {DownloadRequest, ServerProxy,QuestionCircle32Filled},
     setup() {
         const store = useDownloadTasksStore();
         let DownloadTasks = ref({})
@@ -121,11 +141,11 @@ export default defineComponent({
     },
     mounted() {
         this.updateTree()
-        this.proxy = ipcRenderer.sendSync("get-setting", "proxy")
+        this.updateProxy()
     },
     updated() {
         this.updateTree()
-        this.proxy = ipcRenderer.sendSync("get-setting", "proxy")
+        this.updateProxy()
     },
     data() {
         return {
@@ -144,9 +164,38 @@ export default defineComponent({
             selectOption3: [],
             selectedOpt3: [],
             webSocket: null,
+
+            currentIpv4: null,
+            currentIpv6: null
         }
     },
     methods: {
+        getIp() {
+            this.axios.get("https://v4.ident.me").then(data => {
+                this.currentIpv4 = data.data
+            }).catch((reason) => {
+                this.currentIpv4 = null
+            })
+            this.axios.get("https://v6.ident.me").then(data => {
+                this.currentIpv6 = data.data
+            }).catch((reason) => {
+                this.currentIpv6 = null
+            })
+        },
+        updateProxy(){
+            let proxy = ipcRenderer.sendSync("get-setting", "proxy")
+            switch (proxy) {
+                case null:
+                    this.proxy = "直接连接";
+                    break;
+                case "system":
+                    this.proxy = "系统代理";
+                    break;
+                default:
+                    this.proxy = proxy
+            }
+            this.getIp()
+        },
         updateTree(refresh = false) {
             this.treeLoading = true
             if (refresh) {

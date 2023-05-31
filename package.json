@@ -1,6 +1,6 @@
 {
   "name": "sekaisubtitle-electron",
-  "version": "0.9.9-rc.3",
+  "version": "0.9.9-rc.4",
   "main": "dist-electron/main/index.js",
   "description": "",
   "author": "XBB <icexb_baka@163.com>",
