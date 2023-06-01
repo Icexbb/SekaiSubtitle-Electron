@@ -587,8 +587,8 @@ export default defineComponent({
             }
 
         },
-        submitStaffItem(item) {
-            this.config_staff.push(item)
+        submitStaffItem() {
+            this.config_staff.push(this.makeStaffItem())
             this.restoreStaffItem()
         },
         clearStaffItem() {
