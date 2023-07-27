@@ -62,7 +62,9 @@
                         <n-collapse-transition @drop="this.acceptDropFile" :show="this.dragging">
                             <n-empty style="user-select: none">
                                 <template #icon>
-                                    <n-icon :component="this.Dropbox"></n-icon>
+                                    <n-icon>
+                                        <Dropbox/>
+                                    </n-icon>
                                 </template>
                                 <template #default>
                                     拖到到此处以快速选择文件
@@ -75,11 +77,20 @@
                             <n-card size="small" v-if="this.video_frame_count">
                                 <n-space :wrap-item="false" justify="space-between">
                                     <span>视频处理区间</span>
-                                    <n-slider
-                                            style="max-width: 50%;"
-                                            :format-tooltip="formatTooltip" placement="left"
-                                            v-model:value="this.config_duration" range :step="1"
-                                            :max="this.video_frame_count" :min="0"/>
+                                    <n-space vertical>
+                                        <n-space justify="space-around">
+                                            <n-input-number v-model:value="this.config_duration[0]">
+                                                <template #suffix><span>帧</span></template>
+                                            </n-input-number>
+                                            <n-input-number v-model:value="this.config_duration[1]">
+                                                <template #suffix><span>帧</span></template>
+                                            </n-input-number>
+                                        </n-space>
+                                        <n-slider
+                                                :format-tooltip="formatTooltip" placement="left"
+                                                v-model:value="this.config_duration" range :step="1"
+                                                :max="this.video_frame_count" :min="0"/>
+                                    </n-space>
                                 </n-space>
                             </n-card>
                             <n-card size="small">
@@ -106,7 +117,7 @@
                             <n-card size="small">
                                 <n-space :wrap="false" justify="space-between" :wrap-item="false">
                                     <span style="justify-content:center;height: 100%;">打字机特效时间</span>
-                                    <n-space justify="end" style="width: min-content;">
+                                    <n-space justify="end">
                                         <n-input-number
                                                 style="min-width: 180px;"
                                                 v-model:value="this.config_type_interval_1"
@@ -330,7 +341,9 @@
                             <n-collapse-transition @drop="this.acceptDropStaff" :show="this.dragging">
                                 <n-empty style="user-select: none">
                                     <template #icon>
-                                        <n-icon :component="this.Dropbox"></n-icon>
+                                        <n-icon>
+                                            <Dropbox/>
+                                        </n-icon>
                                     </template>
                                     <template #default>
                                         拖到到此处以快速导入Staff行
@@ -362,13 +375,9 @@ import {ipcRenderer} from 'electron';
 import {systemFonts} from "../utils/common";
 import fs from "fs";
 import {Dropbox} from "@vicons/fa"
+import path from "path";
 
 export default defineComponent({
-    computed: {
-        Dropbox() {
-            return Dropbox
-        }
-    },
     setup() {
         let systemFontsOptions: Object[] = [];
         systemFonts.forEach((font) => {
@@ -397,7 +406,7 @@ export default defineComponent({
             }
         }
     },
-    inject: ["modalActiveControl", "newTask"],
+    inject: ["modalActiveControl"],
     components: {Dropbox},
     data() {
         return {
@@ -487,15 +496,23 @@ export default defineComponent({
                 this.startAlert("需要选择剧情数据文件")
             } else {
                 let duration: number[] | null = [Math.min(...this.config_duration), Math.max(...this.config_duration)]
-                if (JSON.stringify(duration) === JSON.stringify([0, this.video_info['frameCount']]))
-                    duration = null
-                else if (JSON.stringify(duration) === JSON.stringify([0, 0]))
-                    duration = null
+                if (JSON.stringify(duration) === JSON.stringify([0, 0]))
+                    duration = [0, this.video_info['frameCount']]
+                let outputPath = this.config_video_file
+                outputPath = outputPath.substring(0, outputPath.lastIndexOf('.')) + ".ass"
+                let datafile: string[] = []
+                if (!this.config_video_only) {
+                    datafile = [this.config_json_file]
+                    if (!this.config_json_file.endsWith(".pjs.txt")) {
+                        if (this.config_translate_file.length != 0) {
+                            datafile.push(this.config_translate_file)
+                        }
+                    }
+                }
                 let ProcessConfig = {
                     video_file: this.config_video_file,
-                    json_file: this.config_json_file,
-                    translate_file: this.config_translate_file,
-                    output_path: this.config_output_path,
+                    data_file: datafile,
+                    output_path: outputPath,
                     overwrite: this.config_overwrite,
                     font: this.config_font ? this.config_font : "思源黑体 CN Bold",
                     video_only: this.config_video_only,
@@ -504,15 +521,16 @@ export default defineComponent({
                     duration: duration,
                     debug: false,
                 }
-                this.newTask(ProcessConfig,this.runAfterCreate)
+                console.table(ProcessConfig)
+                ipcRenderer.send("task-new", [JSON.stringify(ProcessConfig), this.runAfterCreate])
                 this.modalClose()
             }
         },
         getVideoInfo() {
             this.video_info = {}
             this.video_frame_count = 0
-            this.axios.get(`http://${ipcRenderer.sendSync("get-core-url")}/subtitle/videoInfo?video_file=${this.config_video_file}`).then((data) => {
-                this.video_info = data.data.data
+            this.axios.get(`http://${ipcRenderer.sendSync("get-core-url")}/video?video_file=${this.config_video_file}`).then((data) => {
+                this.video_info = data.data
                 this.video_frame_count = this.video_info['frameCount']
                 this.config_duration = [0, this.video_frame_count]
             })
@@ -622,9 +640,12 @@ export default defineComponent({
                     if (file['name'].endsWith(ext))
                         this.config_json_file = file['path'];
                 });
-                (['.txt', '.yml']).forEach(ext => {
+                (['.txt']).forEach(ext => {
                     if (file['name'].endsWith(ext))
-                        this.config_translate_file = file['path'];
+                        if (file['name'].endsWith(".pjs.txt"))
+                            this.config_json_file = file['path'];
+                        else
+                            this.config_translate_file = file['path'];
                 })
             });
         },
@@ -668,6 +689,9 @@ export default defineComponent({
             this.config_type_interval_1 = args['SubtitleTyperFade']
             this.config_type_interval_2 = args['SubtitleTyperInterval']
             this.CustomFontSettable = args['SubtitleCustomFontSettable']
+
+            if (this.config_type_interval_1 != undefined) this.config_type_interval_1 = 50;
+            if (this.config_type_interval_2 != undefined) this.config_type_interval_2 = 50;
         })
     },
     watch: {

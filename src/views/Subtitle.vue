@@ -84,65 +84,28 @@ export default defineComponent({
         return {
             modalActiveControl: () => {
                 this.modalActive = false
-            },
-            newTask: (config, runAfterCreate) => {
-                let data = JSON.stringify({type: 'new', data: config, runAfterCreate: runAfterCreate})
-                if (this.webSocket) this.webSocket.send(data);
-            },
-            GeneralTasksControl: (operate, taskId: string) => {
-                this.tasksControl(operate, [taskId])
             }
         };
     },
     methods: {
-        initSocket() {
-            let url = this.url
-            this.webSocket = new WebSocket(url)
-            this.webSocket.onopen = () => {
-                this.webSocket.send(JSON.stringify({type: "alive"}));
-            };
-            this.webSocket.onclose = this.webSocketOnClose
-            this.webSocket.onmessage = this.webSocketOnMessage
-            this.webSocket.onerror = (err) => {
-                console.log('websocket连接失败', err);
-            };
-        },
-        webSocketOnMessage(res) {
-            const data = JSON.parse(res.data)
-            if (data['type'] === 'tasks') this.taskList = data['data']
-            setTimeout(() => {
-                if (this.webSocket) this.webSocket.send(JSON.stringify({type: "alive"}));
-            }, 100)
-        },
-        webSocketOnClose() {
-            if (this.webSocket)
-                this.webSocket.close()
-            if (this.living) {
-                setTimeout(this.initSocket, 100)
-                console.log("WebSocket Closed Unexpectedly")
-                this.taskList = {}
-            }
-        },
         tasksControl(operate, taskList: string[] | null = null) {
             if (taskList == null)
                 taskList = Object.keys(this.taskList)
             taskList.forEach(
                 (key) => {
-                    if (this.webSocket) this.webSocket.send(JSON.stringify({type: operate, data: key}));
+                    ipcRenderer.send("task-operate",[key,operate])
                 }
             )
         }
     },
-    created() {
-        if (!this.webSocket) this.initSocket();
+    mounted() {
+        this.taskList=ipcRenderer.sendSync("get-task-status")
+        ipcRenderer.on("task-status-change",(event, args)=>{
+            this.taskList=args
+        })
     },
     unmounted() {
-        this.living = false
-        try {
-            if (this.webSocket) this.webSocket.close();
-        } finally {
-            this.webSocket = null
-        }
+        ipcRenderer.removeAllListeners("task-status-change")
     }
 })
 </script>

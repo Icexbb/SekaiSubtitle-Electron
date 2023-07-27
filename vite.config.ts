@@ -14,6 +14,7 @@ export default defineConfig(({command}) => {
     const isBuild = command === 'build'
     const sourcemap = isServe || !!process.env.VSCODE_DEBUG
 
+
     return {
         plugins: [
             vue({}),
@@ -61,23 +62,10 @@ export default defineConfig(({command}) => {
             // Use Node.js API in the Renderer-process
             renderer(),
         ],
-        server: process.env.VSCODE_DEBUG && (() => {
-            const url = new URL(pkg.debug.env.VITE_DEV_SERVER_URL)
-            return {
-                host: url.hostname,
-                port: +url.port,
-                proxy: {
-                    "^/best": {
-                        target: "https://storage.sekai.best/sekai-assets",
-                        changeOrigin: true,
-                        rewrite: (path) => {
-                            path.replace(/^\/best/, "")
-                        },
-
-                    }
-                },
-            }
-        })(),
+        server: {
+            host: "127.0.0.1",
+            port: 50023
+        },
         clearScreen: false,
     }
 })

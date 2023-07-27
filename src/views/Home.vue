@@ -192,7 +192,7 @@ export default defineComponent({
             shell.openPath(path.dirname(ipcRenderer.sendSync("get-core-path")))
         },
         showCorePage() {
-            shell.openExternal("https://github.com/Icexbb/SekaiSubtitle-Core/releases/latest")
+            shell.openExternal("https://github.com/Icexbb/SekaiSubtitle-Core-GO/releases/latest")
         },
         getLatestCore() {
             this.showModal = false;

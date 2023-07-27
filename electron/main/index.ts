@@ -4,7 +4,6 @@ import {join} from 'node:path'
 import path from 'path';
 import cp from 'child_process';
 import * as fs from 'fs';
-import * as net from "net";
 
 const axios = require("axios")
 const WebSocket = require('ws')
@@ -89,7 +88,10 @@ let AppLatestVersion;
 let CoreProcess: cp.ChildProcess = null;
 let CorePort: number = null;
 let CoreConnected: Boolean = false;
-let CoreAliveSocket: WebSocket = null;
+let CoreWebSocket: WebSocket = null;
+let CoreLogs: string[] = [];
+let CoreTaskLogs: object = {};
+let CoreTasks: object = {};
 
 async function createWindow() {
     win = new BrowserWindow({
@@ -107,9 +109,8 @@ async function createWindow() {
     })
     win.setMenuBarVisibility(false)
 
-
-    if (process.env.VITE_DEV_SERVER_URL) { // electron-vite-vue#298
-        await win.loadURL(url)
+    if (!app.isPackaged) { // electron-vite-vue#298
+        await win.loadURL(`http://127.0.0.1:50023`)
         // Open devTool if the app is not packaged
         win.webContents.openDevTools()
     } else {
@@ -131,26 +132,50 @@ async function createWindow() {
 }
 
 function initSocket() {
-    CoreAliveSocket = new WebSocket(`ws://127.0.0.1:${CorePort}/alive`)
+    CoreWebSocket = new WebSocket(`ws://127.0.0.1:${CorePort}/`)
 
-    CoreAliveSocket.onopen = () => {
+    CoreWebSocket.onopen = () => {
         console.log("WebSocket Connected")
         CoreConnected = true;
-        CoreAliveSocket.send(JSON.stringify({type: "alive"}));
+        CoreWebSocket.send(JSON.stringify({type: "alive"}));
     }
-    CoreAliveSocket.onclose = () => {
+    CoreWebSocket.onclose = () => {
         CoreConnected = false;
         if (fs.existsSync(CoreBin) && CoreProcess && running) {
             setTimeout(initSocket, 1500);
         }
+        CoreTasks = []
+        CoreTaskLogs = {}
     }
-    CoreAliveSocket.onmessage = () => {
+    CoreWebSocket.onmessage = (m) => {
         if (!CoreConnected) CoreConnected = true;
-        setTimeout(() => {
-            CoreAliveSocket.send(JSON.stringify({type: "alive"}));
-        }, 500)
+        let msg = JSON.parse(m.data)
+
+        switch (msg.type) {
+            case "log":
+                let msgData = JSON.parse(msg.data)
+                let taskId = msgData.id
+                let taskLog = msgData.message
+                if (CoreTaskLogs.hasOwnProperty(taskId)) {
+                    CoreTaskLogs[taskId] = [...CoreTaskLogs[taskId], taskLog]
+                } else {
+                    CoreTaskLogs[taskId] = [taskLog]
+                }
+
+                win.webContents.send(`task-log-${taskId}`, taskLog)
+                break;
+            case "tasks":
+                CoreTasks = JSON.parse(msg.data)
+                win.webContents.send("task-status-change", CoreTasks)
+                break;
+            case "alive":
+                setTimeout(() => {
+                    CoreWebSocket.send(JSON.stringify({type: "alive"}));
+                }, 500);
+                break;
+        }
     }
-    CoreAliveSocket.onerror = (res) => {
+    CoreWebSocket.onerror = (res) => {
         if (!fs.existsSync(CoreBin)) {
             CoreConnected = false;
             //TODO
@@ -161,7 +186,6 @@ function initSocket() {
     }
 }
 
-let CoreLogs: string[] = [];
 
 function appendLog(data: Buffer) {
     const iconv = require('iconv-lite');
@@ -178,39 +202,36 @@ function appendLog(data: Buffer) {
 }
 
 
-function getPort() {
-    return new Promise((resolve) => {
-        while (true) {
-            let port = 1024 + Math.floor(Math.random() * (65535 - 1024))
-            let server = net.createServer().listen(port);
-            if (server.listening) {
-                server.close()
-                resolve(port);
-                break
-            }
-        }
-    });
+function startReleaseCore() {
+    if (fs.existsSync(CoreBin)) {
+        CoreProcess = cp.spawn(`"${CoreBin}" -p ${CorePort}`, {shell: true})
+        CoreProcess.stderr.on("data", appendLog)
+        CoreProcess.stdout.on("data", appendLog)
+        console.log("Core Started")
+    } else
+        console.log("Core Not Found")
 }
 
+import getPort from "./port"
 
 function initCore() {
     initCoreVersion()
-    getPort().then(
-        (port: number) => {
-            CorePort = port
-            if (fs.existsSync(CoreBin)) {
-                CoreProcess = cp.spawn(`"${CoreBin}" -p ${CorePort}`, {shell: true})
-                CoreProcess.stderr.on("data", appendLog)
-                CoreProcess.stdout.on("data", appendLog)
-                console.log("Core Started!")
-            } else
-                console.log("Core Not Found!")
+    let devPort = 50000;
+    getPort({port: devPort}).then((port) => {
+        if (port === devPort) {
+            console.log("Using Release Core")
+            getPort().then(port => {
+                CorePort = port
+            }).then(startReleaseCore)
+        } else {
+            console.log("Using Dev Core")
+            CorePort = 50000
         }
-    ).finally(() => {
+    }).finally(() => {
         setTimeout(initSocket, 1500)
     })
-}
 
+}
 
 app.whenReady().then(createWindow).then(initCore).then(() => {
     const setting = fs.existsSync(path.join(PROGRAM_DIR, 'setting.json'))
@@ -223,13 +244,12 @@ app.on('window-all-closed', () => {
     running = false
     win = null
     try {
-        CoreAliveSocket.close()
+        CoreWebSocket.close()
         if (CoreProcess) CoreProcess.kill();
     } finally {
         app.quit();
     }
 })
-
 
 app.on('second-instance', () => {
     if (win) {
@@ -310,6 +330,17 @@ ipcMain.on('select-file-save-subtitle', function (event) {
         event.sender.send('selected-subtitle-path', result)
     })
 });
+
+ipcMain.on('select-file-exist-story', function (event) {
+    dialog.showOpenDialog({
+        title: '选择数据文件',
+        properties: ['openFile'],
+        filters: [{name: '世界计划数据文件', extensions: ['json', 'asset','pjs.txt']}]
+    }).then(result => {
+        event.sender.send('selected-story', result)
+    })
+});
+
 ipcMain.on('get-system-font', function (event) {
     let fontList = require('font-list')
     fontList.getFonts()
@@ -418,7 +449,7 @@ ipcMain.on("get-core-version", (event) => {
         axios.get("https://api.github.com/repos/Icexbb/SekaiSubtitle-core/releases").then(resp => {
             CoreLatestVersion = resp.data[0].tag_name;
             event.sender.send("get-core-version-result", [CoreVersion, CoreLatestVersion])
-        })
+        }).catch()
     else
         event.sender.send("get-core-version-result", [CoreVersion, CoreLatestVersion])
 })
@@ -453,13 +484,13 @@ ipcMain.on("get-app-version", (event) => {
         axios.get("https://api.github.com/repos/Icexbb/SekaiSubtitle-electron/releases").then(resp => {
             AppLatestVersion = resp.data[0].tag_name;
             event.sender.send("get-app-version-result", [AppVersion, AppLatestVersion])
-        })
+        }).catch()
     else
         event.sender.send("get-app-version-result", [AppVersion, AppLatestVersion])
 })
 ipcMain.on("restart-core", (event) => {
     try {
-        CoreAliveSocket.close()
+        CoreWebSocket.close()
         CoreProcess.kill()
         CoreProcess = null;
     } catch (e) {
@@ -470,10 +501,31 @@ ipcMain.on("restart-core", (event) => {
 })
 ipcMain.on("stop-core", (event, args) => {
     try {
-        CoreAliveSocket.close()
+        CoreWebSocket.close()
         CoreProcess.kill()
         CoreProcess = null;
     } catch (e) {
         console.log(e)
+    }
+})
+
+ipcMain.on("get-task-log", (event, args) => {
+    event.returnValue = CoreTaskLogs[args]
+})
+ipcMain.on("get-task-status", (event, args) => {
+    event.returnValue = CoreTasks
+})
+ipcMain.on("task-operate", (event, args) => {
+    if (CoreWebSocket.readyState == CoreWebSocket.OPEN) {
+        CoreWebSocket.send(JSON.stringify({type: args[1], data: args[0]}))
+    }
+})
+
+ipcMain.on("task-new", (event, args) => {
+    if (CoreWebSocket.readyState == CoreWebSocket.OPEN) {
+        CoreWebSocket.send(JSON.stringify({
+            type: "new",
+            data: JSON.stringify({config: JSON.parse(args[0]), runAfterCreate: args[1]})
+        }))
     }
 })

@@ -10,12 +10,12 @@
                 <n-progress
                         type="line"
                         :indicator-placement="'inside'"
-                        :percentage="this.currentProgress"
+                        :percentage="Number(this.currentProgress)"
                         show-indicator
                         style="min-width: 200px;"
                 >
                 <span style="text-align: center;font-size: 16px">
-                    {{ this.currentProgress.toFixed(1) + '%' }}
+                    {{ this.currentProgress + '%' }}
                 </span>
                 </n-progress>
             </n-space>
@@ -53,7 +53,6 @@
         </template>
     </n-card>
 </template>
-
 <script lang="ts">
 import {defineComponent} from "vue";
 import {ipcRenderer} from "electron";
@@ -63,7 +62,6 @@ export default defineComponent({
     data() {
         return {
             webSocket: null,
-            url: `ws://${ipcRenderer.sendSync("get-core-url")}/subtitle/status/${this.task_id}`,
             taskLogs: [],
             taskLogCount: 0,
             currentProgress: 0,
@@ -75,57 +73,10 @@ export default defineComponent({
             eta: 0
         }
     },
-    inject: ["GeneralTasksControl"],
     methods: {
-        initSocket() {
-            let url = this.url
-            this.webSocket = new WebSocket(url)
-            this.webSocket.onopen = this.webSocketOnOpen
-            this.webSocket.onclose = this.webSocketOnClose
-            this.webSocket.onmessage = this.webSocketOnMessage
-            this.webSocket.onerror = this.webSocketOnError
-        },
-        webSocketOnOpen() {
-            this.webSocket.send(JSON.stringify({"request": "config"}));
-        },
-        webSocketOnMessage(res) {
-            const data = JSON.parse(res.data)
-            if (data['type'] === 'log') {
-                let logs = data['data'];
-                logs.forEach((log) => {
-                    this.taskLogCount += 1;
-                    if (log['type'] === 'dict') {
-                        if (log['data']['end']) {
-                            // this.webSocket.close()
-                        } else {
-                            this.fps = log['data']['frame'] / log['data']['time']
-                            this.eta = log['data']['remains'] / this.fps
-                            if (log['data']['progress'] !== this.currentProgress) {
-                                this.currentProgress = log['data']['progress']
-                            }
-                        }
-                    } else if (log['type'] === 'str') {
-                        this.taskLogStrings.push(log['data'])
-                    }
-                })
-                if (this.currentProgress == 100 && !this.taskNoticed) this.messageFinish();
-            } else if (data['type'] == 'config') {
-                this.taskConfig = data['data']
-                const filename = this.taskConfig['video_file'].replaceAll('\\', "/")
-                this.taskName = filename.substring(filename.lastIndexOf('/') + 1, filename.lastIndexOf('.'))
-            }
-            this.webSocket.send(JSON.stringify({"request": this.taskLogCount}))
-        },
-        webSocketOnClose() {
-            if (this.webSocket) this.webSocket.close();
-        },
-        webSocketOnError(res) {
-            console.log('websocket连接失败');
-            console.log(res);
-        },
         taskControl(operate) {
+            ipcRenderer.send('task-operate',[ this.task_id, operate])
             if (operate == 'start' || operate == "reload") this.taskReload();
-            this.GeneralTasksControl(operate, this.task_id)
         },
         taskReload() {
             this.taskLogs = []
@@ -146,13 +97,37 @@ export default defineComponent({
                 ])
                 this.taskNoticed = true
             }
+        },
+        handleLog(log:string) {
+            let logObject = JSON.parse(log)
+            if (logObject['type'] === 'dict') {
+                let dict = JSON.parse(logObject['data'])
+                this.fps = dict['fps']//dict['frame'] / (dict['time'] / 1000)
+                this.eta = dict['remains'] / this.fps
+                this.currentProgress = 100 * dict['frame'] / (dict['frame'] + dict['remains'])
+                this.currentProgress = this.currentProgress.toFixed(2)
+                if (dict["remains"] == 1) {
+                    this.messageFinish()
+                }
+            } else if (logObject['type'] === 'string') {
+                this.taskLogStrings.push(logObject['data'])
+            }
         }
     },
     created() {
-        this.initSocket()
+        this.axios.get(`http://${ipcRenderer.sendSync("get-core-url")}/task?id=${this.task_id}`).then(data => {
+            this.taskConfig = JSON.parse(data.data.data)
+            const path = require("path")
+            this.taskName = path.basename(this.taskConfig['video_file'])
+        })
+        let logs :object[]= ipcRenderer.sendSync("get-task-log",this.task_id)
+        logs?.forEach(this.handleLog)
+        ipcRenderer.on(`task-log-${this.task_id}`, (event, args) => {
+            this.handleLog(args)
+        })
     },
     unmounted() {
-        this.webSocket.close()
+        ipcRenderer.removeAllListeners(`task-log-${this.task_id}`)
     }
 })
 </script>
