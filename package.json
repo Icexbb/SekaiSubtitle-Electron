@@ -16,7 +16,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build && electron-builder --config electron-builder.without-core.json && electron-builder --config electron-builder.with-core.json",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build-core": "vue-tsc --noEmit && vite build && electron-builder --config electron-builder.with-core.json"
   },
   "devDependencies": {
     "@vicons/antd": "^0.12.0",

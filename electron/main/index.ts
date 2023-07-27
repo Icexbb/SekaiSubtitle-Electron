@@ -1,9 +1,11 @@
-import {app, BrowserWindow, shell, ipcMain, dialog, Notification, ipcRenderer} from 'electron'
+import {app, BrowserWindow, dialog, ipcMain, Notification, shell} from 'electron'
 import {release} from 'node:os'
 import {join} from 'node:path'
 import path from 'path';
 import cp from 'child_process';
 import * as fs from 'fs';
+import crypto from 'crypto';
+import getPort from "./port"
 
 const axios = require("axios")
 const WebSocket = require('ws')
@@ -55,7 +57,14 @@ const indexHtml = join(process.env.DIST, 'index.html')
 let running = true;
 const CoreBin: string = path.join(PROGRAM_DIR, "core", process.platform === 'win32' ? 'core.exe' : 'core.bin');
 
-let CoreVersion;
+let CoreVersion: string;
+
+function getFileHash(filepath: string) {
+    const buffer = fs.readFileSync(filepath);
+    const hash = crypto.createHash('md5');
+    hash.update(buffer);
+    return hash.digest('hex')
+}
 
 function initCoreVersion() {
     const CoreBinPacked: string = getExtraResourcesPath(process.platform === 'win32' ? 'core.exe' : 'core.bin');
@@ -63,18 +72,22 @@ function initCoreVersion() {
         CoreVersion = cp.execSync(`"${CoreBin}" -v`).toString()
     }
     if (fs.existsSync(CoreBinPacked)) {
-        let CorePackedVersion;
+        let CorePackedVersion: string;
         cp.exec(`"${CoreBinPacked}" -v`, (error, stdout, stderr) => {
             CorePackedVersion = stdout;
             let replace = false;
             if (!fs.existsSync(CoreBin)) replace = true;
             else if (semver.gt(CorePackedVersion, CoreVersion, true)) replace = true;
-            else if (fs.statSync(CoreBinPacked).mtimeMs > fs.statSync(CoreBin).mtimeMs) replace = true;
+            else if (getFileHash(CoreBinPacked) != getFileHash(CoreBin)) replace = true;
 
             if (replace) {
                 CoreVersion = CorePackedVersion;
                 fs.cp(CoreBinPacked, CoreBin, (err) => {
-                    if (err == null) if (app.isPackaged) fs.unlinkSync(CoreBinPacked);
+                    if (err == null) {
+                        if (app.isPackaged) fs.unlinkSync(CoreBinPacked);
+                        app.relaunch();
+                        app.exit(0);
+                    }
                 });
             }
         })
@@ -212,8 +225,6 @@ function startReleaseCore() {
         console.log("Core Not Found")
 }
 
-import getPort from "./port"
-
 function initCore() {
     initCoreVersion()
     let devPort = 50000;
@@ -335,7 +346,7 @@ ipcMain.on('select-file-exist-story', function (event) {
     dialog.showOpenDialog({
         title: '选择数据文件',
         properties: ['openFile'],
-        filters: [{name: '世界计划数据文件', extensions: ['json', 'asset','pjs.txt']}]
+        filters: [{name: '世界计划数据文件', extensions: ['json', 'asset', 'pjs.txt']}]
     }).then(result => {
         event.sender.send('selected-story', result)
     })
