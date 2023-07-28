@@ -8,7 +8,7 @@ const CoreBin: string = ipcRenderer.sendSync("get-core-path")
 
 export async function downloadLatestCore(progress) {
     const coreUrlResp = await axios.get(releaseUrl)
-    let assetList :object[] = coreUrlResp.data[0]['assets'][0]
+    let assetList :object[] = coreUrlResp.data[0]['assets']
     assetList.forEach(value => {
         let coreName:string = value['name']
         let found = false;
