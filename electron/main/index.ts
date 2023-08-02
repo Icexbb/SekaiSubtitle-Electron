@@ -4,12 +4,10 @@ import {join} from 'node:path'
 import path from 'path';
 import cp from 'child_process';
 import * as fs from 'fs';
-import crypto from 'crypto';
 import getPort from "./port"
 
-const axios = require("axios")
-const WebSocket = require('ws')
-const semver = require("semver")
+import axios from "axios";
+import WebSocket from 'ws';
 // The built directory structure
 //
 // ├─┬ dist-electron
@@ -25,16 +23,18 @@ process.env.DIST = join(process.env.DIST_ELECTRON, '../dist')
 process.env.PUBLIC = process.env.VITE_DEV_SERVER_URL
     ? join(process.env.DIST_ELECTRON, '../public')
     : process.env.DIST
+
+const EXECUTABLE_EXT = process.platform === 'win32' ? "exe" : "bin"
 const USER_HOME = process.env.HOME || process.env.USERPROFILE
 const PROGRAM_DIR = process.platform === 'win32'
     ? path.join(USER_HOME, 'Documents', 'SekaiSubtitle')
     : path.join(USER_HOME, 'SekaiSubtitle')
-const EXTRA_RESOURCES_PATH = app.isPackaged
-    ? path.join(process.resourcesPath)
-    : path.join(__dirname, '../../extra');
-const getExtraResourcesPath = (...paths: string[]): string => {
-    return path.join(EXTRA_RESOURCES_PATH, ...paths);
-};
+const CORE_PATH = app.isPackaged
+    ? path.join(process.resourcesPath, `../core.${EXECUTABLE_EXT}`)
+    : path.join(__dirname, `../../lib/${process.platform}/core.${EXECUTABLE_EXT}`);
+
+const APP_VER: string = JSON.parse(fs.readFileSync(path.join(__dirname, "../../package.json")).toString()).version;
+const CORE_VER: string = (fs.existsSync(CORE_PATH)) ? cp.execSync(`"${CORE_PATH}" -v`).toString() : "";
 
 // Disable GPU Acceleration for Windows 7
 if (release().startsWith('6.1')) app.disableHardwareAcceleration()
@@ -54,50 +54,12 @@ let win: BrowserWindow | null = null
 const preload = join(__dirname, '../preload/index.js')
 const url = process.env.VITE_DEV_SERVER_URL
 const indexHtml = join(process.env.DIST, 'index.html')
-let running = true;
-const CoreBin: string = path.join(PROGRAM_DIR, "core", process.platform === 'win32' ? 'core.exe' : 'core.bin');
 
-let CoreVersion: string;
+let AppLatestVersion: string;
+let AppRunning: boolean = true;
+let AppLogs: string[] = [];
 
-function getFileHash(filepath: string) {
-    const buffer = fs.readFileSync(filepath);
-    const hash = crypto.createHash('md5');
-    hash.update(buffer);
-    return hash.digest('hex')
-}
-
-function initCoreVersion() {
-    const CoreBinPacked: string = getExtraResourcesPath(process.platform === 'win32' ? 'core.exe' : 'core.bin');
-    if (fs.existsSync(CoreBin)) {
-        CoreVersion = cp.execSync(`"${CoreBin}" -v`).toString()
-    }
-    if (fs.existsSync(CoreBinPacked)) {
-        let CorePackedVersion: string;
-        cp.exec(`"${CoreBinPacked}" -v`, (error, stdout, stderr) => {
-            CorePackedVersion = stdout;
-            let replace = false;
-            if (!fs.existsSync(CoreBin)) replace = true;
-            else if (semver.gt(CorePackedVersion, CoreVersion, true)) replace = true;
-            else if (getFileHash(CoreBinPacked) != getFileHash(CoreBin)) replace = true;
-
-            if (replace) {
-                CoreVersion = CorePackedVersion;
-                fs.cp(CoreBinPacked, CoreBin, (err) => {
-                    if (err == null) {
-                        if (app.isPackaged) fs.unlinkSync(CoreBinPacked);
-                        app.relaunch();
-                        app.exit(0);
-                    }
-                });
-            }
-        })
-    }
-}
-
-
-let CoreLatestVersion;
-const AppVersion = JSON.parse(fs.readFileSync(path.join(__dirname, "../../package.json")).toString()).version;
-let AppLatestVersion;
+let CoreLatestVersion: string;
 let CoreProcess: cp.ChildProcess = null;
 let CorePort: number = null;
 let CoreConnected: Boolean = false;
@@ -105,6 +67,11 @@ let CoreWebSocket: WebSocket = null;
 let CoreLogs: string[] = [];
 let CoreTaskLogs: object = {};
 let CoreTasks: object = {};
+
+interface NotificationOption {
+    title: string,
+    body: string
+}
 
 async function createWindow() {
     win = new BrowserWindow({
@@ -144,17 +111,48 @@ async function createWindow() {
     // }) // #344
 }
 
+function appLog(message: string) {
+    AppLogs.push(message)
+    if (!app.isPackaged) console.log(message)
+}
+
+function coreLog(data: Buffer) {
+    const iconv = require('iconv-lite');
+    const encoding = getEncoding();
+    let logString: string = iconv.decode(data, encoding['WebName']);
+    let logArr = logString.split('\n')
+        .map(value => value.replace('\r', ""))
+    let logSet = new Set<string>(logArr)
+    Array.from(logSet).forEach(value => {
+        if (value.length) {
+            CoreLogs.push(value);
+        }
+    })
+}
+
+function setProxy(setting: { [x: string]: any; }) {
+    switch (setting['proxy']) {
+        case null:
+            win.webContents.session.setProxy({mode: 'direct'}).then();
+            break;
+        case "system":
+            win.webContents.session.setProxy({mode: 'system'}).then();
+            break;
+        default:
+            win.webContents.session.setProxy({mode: 'fixed_servers', proxyRules: setting['proxy']}).then();
+    }
+}
+
 function initSocket() {
     CoreWebSocket = new WebSocket(`ws://127.0.0.1:${CorePort}/`)
-
     CoreWebSocket.onopen = () => {
-        console.log("WebSocket Connected")
+        appLog("WebSocket Connected")
         CoreConnected = true;
         CoreWebSocket.send(JSON.stringify({type: "alive"}));
     }
     CoreWebSocket.onclose = () => {
         CoreConnected = false;
-        if (fs.existsSync(CoreBin) && CoreProcess && running) {
+        if (fs.existsSync(CORE_PATH) && CoreProcess && AppRunning) {
             setTimeout(initSocket, 1500);
         }
         CoreTasks = []
@@ -189,53 +187,49 @@ function initSocket() {
         }
     }
     CoreWebSocket.onerror = (res) => {
-        if (!fs.existsSync(CoreBin)) {
+        if (!fs.existsSync(CORE_PATH)) {
             CoreConnected = false;
             //TODO
         } else {
             CoreConnected = false;
-            console.log('WebSocket Error: ', Object.keys(res));
+            appLog(`WebSocket Error: ${Object.keys(res)}`);
         }
     }
 }
 
-
-function appendLog(data: Buffer) {
-    const iconv = require('iconv-lite');
-
-    let logString: string = iconv.decode(data, 'gbk');
-    let logArr = logString.split('\n')
-        .map(value => value.replace('\r', ""))
-    let logSet = new Set<string>(logArr)
-    Array.from(logSet).forEach(value => {
-        if (value.length) {
-            CoreLogs.push(value);
+function getEncoding() {
+    const stdout = cp.execSync('powershell [System.Text.Encoding]::Default')
+    const strEncoding = stdout.toString()
+    const encoding: any = {}
+    for (let line of strEncoding.split(/\r\n/g)) {
+        if (line) {
+            let [key, value] = line.split(':')
+            encoding[key.trim()] = value.trim()
         }
-    })
+    }
+    return encoding
 }
 
-
 function startReleaseCore() {
-    if (fs.existsSync(CoreBin)) {
-        CoreProcess = cp.spawn(`"${CoreBin}" -p ${CorePort}`, {shell: true})
-        CoreProcess.stderr.on("data", appendLog)
-        CoreProcess.stdout.on("data", appendLog)
-        console.log("Core Started")
+    if (fs.existsSync(CORE_PATH)) {
+        CoreProcess = cp.spawn(`"${CORE_PATH}" -p ${CorePort}`, {shell: true})
+        CoreProcess.stderr.on("data", coreLog)
+        CoreProcess.stdout.on("data", coreLog)
+        appLog("Core Started")
     } else
-        console.log("Core Not Found")
+        appLog("Core Not Found")
 }
 
 function initCore() {
-    initCoreVersion()
     let devPort = 50000;
     getPort({port: devPort}).then((port) => {
         if (port === devPort) {
-            console.log("Using Release Core")
+            appLog("Using Release Core")
             getPort().then(port => {
                 CorePort = port
             }).then(startReleaseCore)
         } else {
-            console.log("Using Dev Core")
+            appLog("Using Dev Core")
             CorePort = 50000
         }
     }).finally(() => {
@@ -252,7 +246,7 @@ app.whenReady().then(createWindow).then(initCore).then(() => {
 })
 
 app.on('window-all-closed', () => {
-    running = false
+    AppRunning = false
     win = null
     try {
         CoreWebSocket.close()
@@ -281,15 +275,10 @@ app.on('activate', () => {
 })
 
 process.on('uncaughtException', function (err) {
-    console.log(err);
+    appLog(`Uncaught Exception: ${err}`);
 });
 
-interface NotificationOption {
-    title: string,
-    body: string
-}
 
-// New window example arg: new windows url
 ipcMain.handle('open-win', (_, arg) => {
     const childWindow = new BrowserWindow({
         webPreferences: {
@@ -368,22 +357,21 @@ ipcMain.on('read-file-json', function (event) {
         event.sender.send('read-file-json-result', result)
     })
 });
-ipcMain.on('save-file-json', function (event, args) {
+ipcMain.on('save-file-json', function (_, args) {
     dialog.showSaveDialog({
         properties: ['createDirectory',],
         filters: [{name: 'Json文件', extensions: ['json']}]
     }).then(result => {
         if (!result.canceled) {
             fs.writeFile(result.filePath, JSON.stringify(args), err => {
-                if (err) console.log(err)
-                else console.log("Saved!")
+                if (err) appLog(`Save-file-json Error:${err}`)
+                else appLog("Save-file-json Successed!")
             })
         }
     })
 });
-ipcMain.on('save-setting', (event, args) => {
+ipcMain.on('save-setting', (_, args) => {
     if (!fs.existsSync(PROGRAM_DIR)) fs.mkdirSync(PROGRAM_DIR)
-
     if (fs.existsSync(PROGRAM_DIR)) {
         fs.writeFileSync(path.join(PROGRAM_DIR, 'setting.json'), JSON.stringify(args))
         setProxy(args)
@@ -392,18 +380,6 @@ ipcMain.on('save-setting', (event, args) => {
     }
 })
 
-function setProxy(setting) {
-    switch (setting['proxy']) {
-        case null:
-            win.webContents.session.setProxy({mode: 'direct'}).then();
-            break;
-        case "system":
-            win.webContents.session.setProxy({mode: 'system'}).then();
-            break;
-        default:
-            win.webContents.session.setProxy({mode: 'fixed_servers', proxyRules: setting['proxy']}).then();
-    }
-}
 
 ipcMain.on('get-setting', (event, args) => {
     const setting = fs.existsSync(path.join(PROGRAM_DIR, 'setting.json'))
@@ -431,7 +407,7 @@ ipcMain.on('drag-start', (event, filePath) => {
     })
     event.sender.send('drag-finished')
 })
-ipcMain.on('notification-show', (event, args: [NotificationOption, string]) => {
+ipcMain.on('notification-show', (_, args: [NotificationOption, string]) => {
     const notification = new Notification(args[0])
     let targetPath = args[1];
     if (process.platform.includes("win32")) {
@@ -448,7 +424,7 @@ ipcMain.on("get-core-logs", (event) => {
     event.sender.send('get-core-logs-result', CoreLogs)
 })
 ipcMain.on("get-core-exist", (event) => {
-    event.returnValue = fs.existsSync(CoreBin);
+    event.returnValue = fs.existsSync(CORE_PATH);
     event.sender.send("get-core-exist-result",)
 })
 
@@ -457,36 +433,29 @@ ipcMain.on("get-core-url", (event) => {
 })
 ipcMain.on("get-core-version", (event) => {
     if (CoreLatestVersion == null)
-        axios.get("https://api.github.com/repos/Icexbb/SekaiSubtitle-core/releases").then(resp => {
+        axios.get("https://api.github.com/repos/Icexbb/SekaiSubtitle-Core-GO/releases").then(resp => {
             CoreLatestVersion = resp.data[0].tag_name;
-            event.sender.send("get-core-version-result", [CoreVersion, CoreLatestVersion])
+            event.sender.send("get-core-version-result", [CORE_VER, CoreLatestVersion])
         }).catch()
     else
-        event.sender.send("get-core-version-result", [CoreVersion, CoreLatestVersion])
+        event.sender.send("get-core-version-result", [CORE_VER, CoreLatestVersion])
 })
 ipcMain.on("get-core-alive", (event) => {
     event.sender.send("get-core-alive-result", CoreConnected)
 })
+
 ipcMain.on("get-core-path", (event) => {
-    let CorePath = CoreBin;
-    if (process.platform.includes("win32")) {
-        while (CorePath.includes('/')) {
-            CorePath = CorePath.replace('/', '\\')
-        }
-    }
+    let CorePath = CORE_PATH;
+    if (process.platform.includes("win32")) while (CorePath.includes('/')) CorePath = CorePath.replace('/', '\\')
     if (!fs.existsSync(path.dirname(CorePath))) fs.mkdirSync(path.dirname(CorePath))
     event.returnValue = CorePath
 })
-ipcMain.on("get-asset-path", (event) => {
-    let AssetDir: string = process.platform === 'win32'
-        ? path.join(String(USER_HOME), 'Documents', 'SekaiSubtitle', "data")
-        : path.join(String(USER_HOME), 'SekaiSubtitle', "data")
 
-    if (process.platform.includes("win32")) {
-        while (AssetDir.includes('/')) {
+ipcMain.on("get-asset-path", (event) => {
+    let AssetDir: string = path.join(PROGRAM_DIR, "data")
+    if (process.platform.includes("win32"))
+        while (AssetDir.includes('/'))
             AssetDir = AssetDir.replace('/', '\\')
-        }
-    }
     if (!fs.existsSync(AssetDir)) fs.mkdirSync(AssetDir)
     event.returnValue = AssetDir
 })
@@ -494,45 +463,61 @@ ipcMain.on("get-app-version", (event) => {
     if (CoreLatestVersion == null)
         axios.get("https://api.github.com/repos/Icexbb/SekaiSubtitle-electron/releases").then(resp => {
             AppLatestVersion = resp.data[0].tag_name;
-            event.sender.send("get-app-version-result", [AppVersion, AppLatestVersion])
+            event.sender.send("get-app-version-result", [APP_VER, AppLatestVersion])
         }).catch()
     else
-        event.sender.send("get-app-version-result", [AppVersion, AppLatestVersion])
+        event.sender.send("get-app-version-result", [APP_VER, AppLatestVersion])
 })
 ipcMain.on("restart-core", (event) => {
+    appLog("Restart Core")
     try {
-        CoreWebSocket.close()
-        CoreProcess.kill()
+        if (CoreWebSocket != null) CoreWebSocket.close()
+        if (CoreProcess != null) CoreProcess.kill()
         CoreProcess = null;
     } catch (e) {
+        appLog(e)
     }
     initCore();
     event.sender.send("restart-core-result", CoreConnected)
     event.returnValue = CoreConnected
 })
-ipcMain.on("stop-core", (event, args) => {
+ipcMain.on("stop-core", (event) => {
+    appLog("Close Core")
     try {
-        CoreWebSocket.close()
-        CoreProcess.kill()
+        if (CoreWebSocket != null) CoreWebSocket.close()
+        if (CoreProcess != null) CoreProcess.kill()
         CoreProcess = null;
     } catch (e) {
-        console.log(e)
+        appLog(e)
     }
+    event.sender.send("stop-core-result", CoreConnected)
+    event.returnValue = CoreProcess == null
 })
-
+ipcMain.on("write-new-core", (_, args) => {
+    try {
+        if (CoreWebSocket != null) CoreWebSocket.close()
+        if (CoreProcess != null) CoreProcess.kill()
+        CoreProcess = null;
+    } catch (e) {
+        appLog(e)
+    }
+    fs.writeFileSync(CORE_PATH, args);
+    if (app.isPackaged) app.relaunch();
+    app.exit();
+})
 ipcMain.on("get-task-log", (event, args) => {
     event.returnValue = CoreTaskLogs[args]
 })
-ipcMain.on("get-task-status", (event, args) => {
+ipcMain.on("get-task-status", (event) => {
     event.returnValue = CoreTasks
 })
-ipcMain.on("task-operate", (event, args) => {
+ipcMain.on("task-operate", (_, args) => {
     if (CoreWebSocket.readyState == CoreWebSocket.OPEN) {
         CoreWebSocket.send(JSON.stringify({type: args[1], data: args[0]}))
     }
 })
 
-ipcMain.on("task-new", (event, args) => {
+ipcMain.on("task-new", (_, args) => {
     if (CoreWebSocket.readyState == CoreWebSocket.OPEN) {
         CoreWebSocket.send(JSON.stringify({
             type: "new",

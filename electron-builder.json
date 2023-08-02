@@ -9,14 +9,15 @@
     "dist/**/*",
     "dist-electron/**/*"
   ],
+  "compression": "maximum",
   "win": {
     "target": "nsis",
     "icon": "public/favicon.ico",
-    "artifactName": "${productName}_${version}_setup_with_core.${ext}",
+    "artifactName": "${productName}_${version}_setup.${ext}",
     "extraResources": [
       {
-        "from": "./extra/core.exe",
-        "to": "../resources/core.exe"
+        "from": "./lib/win32",
+        "to": ".."
       }
     ]
   },

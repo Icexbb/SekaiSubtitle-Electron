@@ -1,25 +1,23 @@
 <template>
-    <n-card style="height: 100%;user-select: none;" content-style="height:100%;"
-            header-style="padding: 1em;"
-            :segmented="false" class="full-height">
+    <n-card style="height: 100%;user-select: none;" content-style="height:100%;" header-style="padding: 1em;"
+        :segmented="false" class="full-height">
         <template #header><span> </span></template>
         <template #header-extra>
             <n-space v-if="!this.updating">
                 <n-popover trigger="hover">
                     <template #trigger>
-                        <n-button
-                                :type="this.coreNeedUpdate?'warning':(this.coreConnected?'success':'tertiary')"
-                                quaternary strong @click.left="this.showLog">
+                        <n-button :type="this.coreNeedUpdate ? 'warning' : (this.coreConnected ? 'success' : 'tertiary')"
+                            quaternary strong @click.left="this.showLog">
                             <template #icon>
                                 <n-badge v-if="this.coreNeedUpdate">
                                     <n-icon>
-                                        <PlugConnected20Filled v-if="this.coreConnected"/>
-                                        <PlugDisconnected20Filled v-else/>
+                                        <PlugConnected20Filled v-if="this.coreConnected" />
+                                        <PlugDisconnected20Filled v-else />
                                     </n-icon>
                                 </n-badge>
                                 <n-icon v-else>
-                                    <PlugConnected20Filled v-if="this.coreConnected"/>
-                                    <PlugDisconnected20Filled v-else/>
+                                    <PlugConnected20Filled v-if="this.coreConnected" />
+                                    <PlugDisconnected20Filled v-else />
                                 </n-icon>
                             </template>
                             <template #default>
@@ -33,16 +31,16 @@
                 </n-popover>
                 <n-popover trigger="hover">
                     <template #trigger>
-                        <n-button :type="this.appNeedUpdate?'warning':'tertiary'"
-                                  quaternary strong @click="this.showHomePage">
+                        <n-button :type="this.appNeedUpdate ? 'warning' : 'tertiary'" quaternary strong
+                            @click="this.showHomePage">
                             <template #icon>
                                 <n-badge v-if="this.appNeedUpdate">
                                     <n-icon>
-                                        <Apps20Regular/>
+                                        <Apps20Regular />
                                     </n-icon>
                                 </n-badge>
                                 <n-icon v-else>
-                                    <Apps20Regular/>
+                                    <Apps20Regular />
                                 </n-icon>
                             </template>
                             <template #default>
@@ -58,29 +56,26 @@
         </template>
         <template #default>
             <n-space v-if="!this.updating" vertical justify="center"
-                     style="justify-content: center;align-items: center;display:flex;text-align: center;height: 100%;"
-            >
+                style="justify-content: center;align-items: center;display:flex;text-align: center;height: 100%;">
                 <img class="home-logo" src="../assets/icon.png" alt="Sekai Subtitle" disabled :draggable="false">
-                <n-gradient-text disabled
-                                 :gradient="this.titleGradient" font-size="32">
+                <n-gradient-text disabled :gradient="this.titleGradient" font-size="32">
                     Sekai Subtitle
                 </n-gradient-text>
-                <n-divider style="min-width: 250px;"/>
+                <n-divider style="min-width: 250px;" />
                 <n-space justify="center">
-                    <n-button @click="()=>{this.$router.push('/subtitle')}" :disabled="!this.coreConnected">
+                    <n-button @click="() => { this.$router.push('/subtitle') }" :disabled="!this.coreConnected">
                         自动轴机
                     </n-button>
-                    <n-button @click="()=>{this.$router.push('/download')}">
+                    <n-button @click="() => { this.$router.push('/download') }">
                         数据下载
                     </n-button>
-                    <n-button @click="()=>{this.$router.push('/translate')}">
+                    <n-button @click="() => { this.$router.push('/translate') }">
                         文档翻译
                     </n-button>
                 </n-space>
             </n-space>
             <n-space v-else vertical justify="center"
-                     style="justify-content: center;align-items: center;display:flex;text-align: center;height: 100%;"
-            >
+                style="justify-content: center;align-items: center;display:flex;text-align: center;height: 100%;">
                 <n-progress type="circle" :percentage="this.updateProgress" style="width: 150px;">
                     <img class="home-logo" src="../assets/icon.png" alt="Sekai Subtitle" disabled :draggable="false">
                 </n-progress>
@@ -91,10 +86,9 @@
         </template>
     </n-card>
     <n-modal :show="this.showModal" closable>
-        <n-card style="width: 80%" title="内核日志" role="dialog" aria-modal="true" closable
-                @close="this.showModal=false">
+        <n-card style="width: 80%" title="内核日志" role="dialog" aria-modal="true" closable @close="this.showModal = false">
             <n-scrollbar style=" max-height: 300px">
-                <n-log style="height: max-content; max-height: 300px;" :log="this.logs.join('\n')"/>
+                <n-log style="height: max-content; max-height: 300px;" :log="this.logs.join('\n')" />
             </n-scrollbar>
             <template #action>
                 <n-space justify="end">
@@ -108,17 +102,16 @@
 </template>
 
 <script lang="ts">
-import {defineComponent} from "vue";
-import {ipcRenderer} from "electron";
-import {PlugConnected20Filled, PlugDisconnected20Filled, Apps20Regular} from "@vicons/fluent"
-import {shell} from "electron"
+import { defineComponent } from "vue";
+import { ipcRenderer } from "electron";
+import { PlugConnected20Filled, PlugDisconnected20Filled, Apps20Regular } from "@vicons/fluent"
+import { shell } from "electron"
 import path from "path";
 import * as semver from "semver"
-import {downloadLatestCore} from "../utils/core";
 
 
 export default defineComponent({
-    components: {PlugConnected20Filled, PlugDisconnected20Filled, Apps20Regular},
+    components: { PlugConnected20Filled, PlugDisconnected20Filled, Apps20Regular },
     data() {
         return {
             titleGradient: "linear-gradient(90deg, rgb(255,90,87) 0%,rgb(251,204,43) 33%, rgb(19,201,255) 66%, rgb(70,102,255) 100%)",
@@ -164,9 +157,12 @@ export default defineComponent({
                     this.latestAppVersion = args[1]
                     if (semver.gt(this.latestAppVersion, this.appVersion, true)) {
                         this.appNeedUpdate = true
+                         console.log(args)
+
                     }
                 } catch (e) {
                     this.appNeedUpdate = true
+                    console.log(e)
                 }
             })
 
@@ -197,18 +193,41 @@ export default defineComponent({
         getLatestCore() {
             this.showModal = false;
             this.updating = true;
+            ipcRenderer.sendSync("stop-core");
             const ProgressShow = (event) => {
                 this.updateProgress = event.progress * 100
-                let speed = event.rate / 1024
-                this.downloadRate = `${speed}KB/s`
-                if (speed > 1024) this.downloadRate = `${speed / 1024}MB/s`
+                let speed: number = event.rate / 1024
+                this.downloadRate = `${speed.toFixed(2)}KB/s`
+                if (speed > 1024) this.downloadRate = `${(speed / 1024).toFixed(2)}MB/s`
             }
-            downloadLatestCore(ProgressShow).catch((err) => {
-                alert(`在下载最新内核时发生错误：${err}\n请重试或者手动下载替换内核。`)
-            }).finally(() => {
-                this.updating = false;
-                ipcRenderer.send("get-core-version")
+
+            let coreExt: string = ipcRenderer.sendSync("get-core-path");
+            coreExt = coreExt.substring(coreExt.lastIndexOf('.'));
+            const releaseUrl: string = "https://api.github.com/repos/Icexbb/SekaiSubtitle-Core-Go/releases"
+            this.axios.get(releaseUrl).then((resp) => {
+                let assetList: object[] = resp.data[0]['assets']
+                assetList.forEach(value => {
+                    let coreName: string = value['name']
+                    if (coreName.toLowerCase().endsWith(coreExt)) {
+                        let coreUrl: string = value['browser_download_url']
+                        this.axios.get(coreUrl, {
+                            responseType: "arraybuffer",
+                            onDownloadProgress: ProgressShow
+                        }).then((resp) => {
+                            setTimeout(() => {
+                                const data = Buffer.from(resp.data, 'binary');
+                                ipcRenderer.sendSync("write-new-core", data)
+                            }, 1000)
+                        }).catch((err) => {
+                            alert(`在下载最新内核时发生错误：${err}\n请重试或者手动下载替换内核。`)
+                        }).finally(() => {
+                            this.updating = false;
+                        })
+                    }
+                })
             })
+
+
         }
     },
     mounted() {

@@ -1,6 +1,12 @@
 <template>
     <n-scrollbar v-if="this.loaded">
-
+        <n-page-header>
+        </n-page-header>
+        <n-space :item-style="{width:'90%'}" justify="center">
+            <template v-for="data in this.eventData.data" :key="this.eventData.data.indexOf(data)">
+                <TranslateCard  :data="data"></TranslateCard>
+            </template>
+        </n-space>
     </n-scrollbar>
 
     <n-card v-else style="height: 100%;">
@@ -11,20 +17,25 @@
                 </n-space>
             </n-space>
         </template>
-
     </n-card>
 </template>
 <script lang="ts">
 import {defineComponent} from 'vue'
 import {ipcRenderer} from "electron";
+import {GameStoryData, StoryEventSet, TranslateData} from "../utils/data"
+import TranslateCard from "../components/TranslateCard.vue";
 
 export default defineComponent({
     name: "Translate",
+    components: {TranslateCard},
     data() {
+        let jsonData = GameStoryData.FromFile("E:\\Project Sekai\\test\\Connect_live_mmj_01.json")
+        let transData = new TranslateData([], [])
+        let eventData = StoryEventSet.FromLegacy(jsonData, transData)
+        console.log(eventData)
         return {
-            loaded: false,
-            dataFile: "",
-
+            loaded: true,
+            eventData:eventData as StoryEventSet,
         }
     },
     methods: {

@@ -1,7 +1,7 @@
 import path from "path";
 import * as fs from 'fs';
-import {area_name, chara_name, unit_name} from "./constants";
-import {ipcRenderer} from "electron";
+import { area_name, chara_name, unit_name } from "./constants";
+import { ipcRenderer } from "electron";
 
 interface SourceList {
     events: string
@@ -47,7 +47,7 @@ export const AssetDir: string = ipcRenderer.sendSync("get-asset-path")
 function download_list(source: string): Promise<any[]> {
     const source_list = source == "ai" ? update_source_ai() : update_source_best()
     const root = path.join(AssetDir, source, "tree")
-    if (!fs.existsSync(root)) fs.mkdirSync(root, {recursive: true});
+    if (!fs.existsSync(root)) fs.mkdirSync(root, { recursive: true });
 
     const axios = require('axios')
 
@@ -229,5 +229,5 @@ function update_tree(source: string) {
     return tree
 }
 
-export {update_tree, download_list}
+export { update_tree, download_list }
 
