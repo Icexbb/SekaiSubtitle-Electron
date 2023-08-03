@@ -57,7 +57,7 @@ export default defineComponent({
     emits: ['characterTranslated', "translationChanged"],
     data(){
         return{
-            rowCount:this.data.ContentO.split('\\N').length
+            rowCount:this.data?this.data.ContentO.split('\\N').length:0
         }
     },
     methods: {
