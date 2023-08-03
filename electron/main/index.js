@@ -353,7 +353,7 @@ ipcMain.on('select-file-exist-translate', function (event) {
     dialog.showOpenDialog({
         title: '选择翻译文件',
         properties: ['openFile',],
-        filters: [{ name: '世界计划翻译文件', extensions: ['yml', 'txt'] }]
+        filters: [{ name: '世界计划翻译文件', extensions: ['txt'] }]
     }).then(function (result) {
         event.sender.send('selected-translate', result);
     });
@@ -374,6 +374,15 @@ ipcMain.on('select-file-exist-story', function (event) {
         filters: [{ name: '世界计划数据文件', extensions: ['json', 'asset', 'pjs.txt'] }]
     }).then(function (result) {
         event.sender.send('selected-story', result);
+    });
+});
+ipcMain.on('select-file-exist-translated', function (event) {
+    dialog.showOpenDialog({
+        title: '选择已翻译文件',
+        properties: ['openFile'],
+        filters: [{ name: '世界计划数据文件', extensions: ['txt', 'pjs.txt'] }]
+    }).then(function (result) {
+        event.sender.send('selected-translated', result);
     });
 });
 ipcMain.on('get-system-font', function (event) {
@@ -405,6 +414,24 @@ ipcMain.on('save-file-json', function (_, args) {
                     appLog("Save-file-json Successed!");
             });
         }
+    });
+});
+ipcMain.on('select-file-save-translate-new', function (event) {
+    dialog.showSaveDialog({
+        title: '选择翻译文件保存位置',
+        properties: ['createDirectory',],
+        filters: [{ name: 'SekaiSubtitle翻译文件', extensions: ["pjs.txt"] }]
+    }).then(function (result) {
+        event.sender.send('selected-translate-path-new', result);
+    });
+});
+ipcMain.on('select-file-save-translate-legacy', function (event) {
+    dialog.showSaveDialog({
+        title: '选择翻译文件保存位置',
+        properties: ['createDirectory',],
+        filters: [{ name: 'SekaiSubtitle翻译文件', extensions: ["txt"] }]
+    }).then(function (result) {
+        event.sender.send('selected-translate-path-legacy', result);
     });
 });
 ipcMain.on('save-setting', function (_, args) {

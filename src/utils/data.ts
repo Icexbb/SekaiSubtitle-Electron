@@ -320,10 +320,13 @@ class TalkDataItem {
     Voices: VoiceData[]
 
     constructor(obj: object) {
-        this.WindowDisplayName = obj["WindowDisplayName"]
-        this.Body = obj["Body"]
-        this.WhenFinishCloseWindow = obj["WhenFinishCloseWindow"]
-        this.Voices = obj["Voices"]
+        this.WindowDisplayName = obj["WindowDisplayName"];
+        this.Body = obj["Body"];
+        this.WhenFinishCloseWindow = obj["WhenFinishCloseWindow"];
+        this.Voices = [];
+        (obj['Voices'] as object[]).forEach((value) => {
+            this.Voices.push(new VoiceData(value))
+        })
     }
 
     CharacterId(): number {
@@ -491,15 +494,17 @@ export class StoryEvent {
         return new StoryEvent(sArr[0], Number(sArr[1]), sArr[2], sArr[3], sArr[4], sArr[5],)
     }
 
+
     content(): EventContent {
         return new EventContent(
-            this.CharacterT.length > 0 ? this.CharacterT : this.ContentO,
-            this.ContentT.length > 0 ? this.ContentT : this.ContentO
+            this.ContentT.length > 0 ? this.ContentT : this.ContentO,
+            this.CharacterT.length > 0 ? this.CharacterT : this.CharacterO,
         )
     }
 
     String(): string {
-        return `${this.Type},${this.CharacterId.toFixed().padStart(2, '0')},${this.CharacterO},${this.CharacterT},${this.ContentO},${this.ContentT}`
+        return `${this.Type},${this.CharacterId.toFixed().padStart(2, '0')},${this.CharacterO},${this.CharacterT},` +
+            `${this.ContentO.replaceAll("\n", "\\N")},${this.ContentT.replaceAll("\n", "\\N")}`
     }
 
 }
@@ -514,10 +519,10 @@ export class StoryEventSet {
     static FromFile(filepath: string): StoryEventSet {
         let data: StoryEvent[] = []
         if (fs.existsSync(filepath)) {
-            let fileContent = fs.readFileSync(filepath,'utf-8')
+            let fileContent = fs.readFileSync(filepath, 'utf-8')
             let contentArr = fileContent.split("\n")
-            contentArr.forEach(item=>{
-                if (item.length>0){
+            contentArr.forEach(item => {
+                if (item.length > 0) {
                     data.push(StoryEvent.fromString(item))
                 }
             })
@@ -526,59 +531,59 @@ export class StoryEventSet {
         return new StoryEventSet(data)
     }
 
-    static FromLegacy(jsonData:GameStoryData,translateData :TranslateData):StoryEventSet{
+    static FromLegacy(jsonData: GameStoryData, translateData?: TranslateData): StoryEventSet {
         let data: StoryEvent[] = []
 
         if (!jsonData.empty()) {
-            let dialogCount :number= 0
-            let effectCount :number= 0
-            jsonData.Snippets.forEach(snippet=>{
-                if (snippet.Action==1){
+            let dialogCount: number = 0
+            let effectCount: number = 0
+            jsonData.Snippets.forEach(snippet => {
+                if (snippet.Action == 1) {
                     let dialogData = jsonData.TalkData[dialogCount]
-                    if (dialogCount<jsonData.TalkData.length){
+                    if (dialogCount < jsonData.TalkData.length) {
                         let item = new StoryEvent(
-                                "Dialog",
+                            "Dialog",
                             dialogData.CharacterId(),
-                             dialogData.WindowDisplayName,"",
-                            dialogData.Body.replaceAll("\n", "\\N"),""
+                            dialogData.WindowDisplayName, "",
+                            dialogData.Body.replaceAll("\n", "\\N"), ""
                         )
                         data.push(item)
-                        if (dialogData.WhenFinishCloseWindow == 1 ){
+                        if (dialogData.WhenFinishCloseWindow == 1) {
                             data.push(new StoryEvent("Period"))
                         }
                     }
                     dialogCount += 1
                 }
-                if (snippet.Action==6){
+                if (snippet.Action == 6) {
                     let effectData = jsonData.SpecialEffectData[effectCount]
-                    let t :string=""
+                    let t: string = ""
                     if (effectData.EffectType == 8) {
                         t = "Banner"
                     }
                     if (effectData.EffectType == 18) {
                         t = "Marker"
                     }
-                    data.push(new StoryEvent(t,0,"","",effectData.StringVal))
+                    data.push(new StoryEvent(t, 0, "", "", effectData.StringVal))
                     effectCount += 1
                 }
             })
         }
         let result = new StoryEventSet(data)
-        if (!translateData.empty()) {
-            translateData.Dialogs.forEach((value, index)=>{
-                if (index<result.Dialogs().count()){
-                    let iT = result.IndexType("Dialog",1)
-                    if (iT>=0){
+        if (translateData && !translateData.empty()) {
+            translateData.Dialogs.forEach((value, index) => {
+                if (index < result.Dialogs().count()) {
+                    let iT = result.IndexType("Dialog", 1)
+                    if (iT >= 0) {
                         result.data[iT].ContentT = value.Body
                         result.data[iT].CharacterT = value.Chara
                     }
                 }
             })
-            translateData.Effects.forEach((value, index)=>{
-                if (index<result.Effects().count()){
+            translateData.Effects.forEach((value, index) => {
+                if (index < result.Effects().count()) {
                     let iT = result.IndexTypes(["Banner", "Marker"], index)
-                    if (iT>=0){
-                        result.data[iT].ContentT=value.Body
+                    if (iT >= 0) {
+                        result.data[iT].ContentT = value.Body
                     }
                 }
             })
@@ -600,6 +605,20 @@ export class StoryEventSet {
         }
         return -1
     }
+
+    replaceTranslation(s: TranslateData): boolean {
+        if (s.Effects.length == this.Effects().data.length && s.Dialogs.length == this.Dialogs().data.length) {
+            s.Dialogs.forEach((value, index, array) => {
+                this.data[this.IndexType("Dialog", index)].ContentT = value.Body
+                this.data[this.IndexType("Dialog", index)].CharacterT = value.Chara
+            })
+            s.Effects.forEach((value, index, array) => {
+                this.data[this.IndexTypes(["Banner", "Marker"], index)].ContentT = value.Body
+            })
+            return true
+        } else return false
+    }
+
 
     IndexTypes(ts: string[], i: number) {
         let simCount = 0
@@ -644,6 +663,10 @@ export class StoryEventSet {
         return this.Get(["Dialog", "Period"])
     }
 
+    Content(): StoryEventSet {
+        return this.Get(["Dialog", "Banner", "Marker"])
+    }
+
     String(): string {
         let parts: string[] = []
         for (const datum of this.data) {
@@ -651,6 +674,26 @@ export class StoryEventSet {
             else parts.push(datum.String())
         }
         return parts.join("\n")
+    }
+
+    ToLegacy(): string {
+        let result: string[] = []
+        this.data.forEach((value) => {
+            switch (value.Type) {
+                case 'Dialog': {
+                    result.push(`${value.content().Character}：${value.content().Body.replaceAll("\n", "\\N")}`);
+                    break;
+                }
+                case "Period": {
+                    result.push("\n");
+                    break;
+                }
+                default: {
+                    result.push(value.content().Body.replaceAll("\n", "\\N"))
+                }
+            }
+        })
+        return result.join("\n")
     }
 }
 
