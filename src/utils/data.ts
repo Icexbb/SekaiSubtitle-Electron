@@ -608,11 +608,11 @@ export class StoryEventSet {
 
     replaceTranslation(s: TranslateData): boolean {
         if (s.Effects.length == this.Effects().data.length && s.Dialogs.length == this.Dialogs().data.length) {
-            s.Dialogs.forEach((value, index, array) => {
+            s.Dialogs.forEach((value, index) => {
                 this.data[this.IndexType("Dialog", index)].ContentT = value.Body
                 this.data[this.IndexType("Dialog", index)].CharacterT = value.Chara
             })
-            s.Effects.forEach((value, index, array) => {
+            s.Effects.forEach((value, index) => {
                 this.data[this.IndexTypes(["Banner", "Marker"], index)].ContentT = value.Body
             })
             return true
@@ -694,6 +694,10 @@ export class StoryEventSet {
             }
         })
         return result.join("\n")
+    }
+
+    Clear() {
+        this.data = []
     }
 }
 

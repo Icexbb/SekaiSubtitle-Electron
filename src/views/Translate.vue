@@ -4,28 +4,64 @@
             <n-space vertical>
                 <n-page-header class="header" title="翻译" style="padding: 1em">
                     <template #extra>
-                        <n-button @click="this.selectJson">打开新文件</n-button>
+                        <n-space align="end">
+                            <n-popover>
+                                <template #default>
+                                    校对/合意对比用
+                                </template>
+                                <template #trigger>
+                                    <n-button @click="this.selectTranslated">
+                                        {{ this.translated.data.length == 0 ? '载入' : '清除' }}已翻译文件
+                                    </n-button>
+                                </template>
+                            </n-popover>
+                            <n-popconfirm
+                                    positive-text="是" negative-text="否"
+                                    @positive-click="this.selectJson">
+                                <template #trigger>
+                                    <n-button> 打开新文件</n-button>
+                                </template>
+                                <template #default>
+                                    <n-text>确认关闭？ 未保存的更改将被舍弃！</n-text>
+                                </template>
+                            </n-popconfirm>
+                            <n-popconfirm
+
+                                    positive-text="是" negative-text="否"
+                                    @positive-click="this.clearEventData">
+                                <template #trigger>
+                                    <n-button> 关闭文件</n-button>
+                                </template>
+                                <template #default>
+                                    <n-text>确认关闭？ 未保存的更改将被舍弃！</n-text>
+                                </template>
+                            </n-popconfirm>
+                        </n-space>
                     </template>
                     <template #default>
                         <n-grid :cols="5">
                             <n-gi :span="1">
                                 <n-statistic label="任务行数" :value="String(this.eventData.Content().data.length)"/>
                             </n-gi>
-                            <n-gi :span="3">
-                                <n-statistic label="操作">
+                            <n-gi :span="2">
+                                <n-statistic label="文件操作">
                                     <template #default>
                                         <n-space justify="start">
-                                            <n-popover>
-                                                <template #default>
-                                                    校对/合意对比用
-                                                </template>
-                                                <template #trigger>
-                                                    <n-button @click="this.selectTranslated">载入已翻译文件</n-button>
-                                                </template>
-                                            </n-popover>
                                             <n-button @click="this.saveToFileNew">保存</n-button>
                                             <n-button @click="this.saveToFileLegacy">保存旧版</n-button>
-
+                                        </n-space>
+                                    </template>
+                                </n-statistic>
+                            </n-gi>
+                            <n-gi :span="2">
+                                <n-statistic label="文本操作">
+                                    <template #default>
+                                        <n-space justify="start">
+                                            <n-dropdown trigger="hover" :options="this.bracketsOptions"
+                                                        @select="this.copyBracket">
+                                                <n-button>复制一对括号</n-button>
+                                            </n-dropdown>
+                                            <n-button @click="this.saveToFileLegacy">保存旧版</n-button>
                                         </n-space>
                                     </template>
                                 </n-statistic>
@@ -79,34 +115,35 @@ import {GameStoryData, StoryEventSet, TranslateData} from "../utils/data"
 import TranslateCard from "../components/TranslateCard.vue";
 import fs from "fs";
 import {CodeWorking} from "@vicons/ionicons5"
+import {useTranslateTasksStore} from "../stores/TranslateTask";
 
 export default defineComponent({
     name: "Translate",
     components: {TranslateCard, CodeWorking},
     data() {
-        let option = [
-            {
-                label: '保存为旧版Sekai Text文件',
-                key: 'legacy'
-            },
-            {
-                key: 'header-divider',
-                type: 'divider'
-            },
-            {
-                label: '保存为Sekai Subtitle文件',
-                key: 'new'
-            }
-        ]
+        let bracketsOptions = []
+        const brackets = ['【】', '「」', '『』', '（）', '‘’', '“”', '()']
+        brackets.forEach((value) => {
+            bracketsOptions.push({label: `${value}`, key: `add-${value}`})
+        })
+        
+        const store = useTranslateTasksStore()
+        let eventData: StoryEventSet = store.eventData
+        let loadedFile: string = store.baseFile
+        let loaded: boolean = store.loaded
         return {
-            loaded: false,
-            loadedFile: "",
-            eventData: new StoryEventSet([]) as StoryEventSet,
+            bracketsOptions,
+            loaded,
+            loadedFile,
+            eventData,
             translated: new StoryEventSet([]) as StoryEventSet,
-            saveOptions: option
         }
     },
     methods: {
+        copyBracket(key) {
+            const {clipboard} = require('electron')
+            clipboard.writeText(key)
+        },
         selectJson() {
             ipcRenderer.send("select-file-exist-story")
             ipcRenderer.once("selected-story", (event, args) => {
@@ -116,25 +153,29 @@ export default defineComponent({
             })
         },
         selectTranslated() {
-            ipcRenderer.send("select-file-exist-translated")
-            ipcRenderer.once("selected-translated", (event, args) => {
-                if (!args.canceled) {
-                    let tData: StoryEventSet
-                    let file: string = args.filePaths[0]
-                    if (file.endsWith("pjs.txt")) {
-                        tData = StoryEventSet.FromFile(file)
-                    } else {
-                        if (this.loadedFile.endsWith("pjs.txt")) {
-                            tData = StoryEventSet.FromFile(this.loadedFile)
+            if (this.translated.count() == 0) {
+                ipcRenderer.send("select-file-exist-translated")
+                ipcRenderer.once("selected-translated", (event, args) => {
+                    if (!args.canceled) {
+                        let tData: StoryEventSet
+                        let file: string = args.filePaths[0]
+                        if (file.endsWith("pjs.txt")) {
+                            tData = StoryEventSet.FromFile(file)
                         } else {
-                            tData = StoryEventSet.FromLegacy(GameStoryData.FromFile(this.loadedFile))
+                            if (this.loadedFile.endsWith("pjs.txt")) {
+                                tData = StoryEventSet.FromFile(this.loadedFile)
+                            } else {
+                                tData = StoryEventSet.FromLegacy(GameStoryData.FromFile(this.loadedFile))
+                            }
+                            let t = TranslateData.FromFile(file)
+                            tData.replaceTranslation(t)
                         }
-                        let t = TranslateData.FromFile(file)
-                        tData.replaceTranslation(t)
+                        this.translated = tData
                     }
-                    this.translated = tData
-                }
-            })
+                })
+            } else {
+                this.translated.Clear()
+            }
         },
         saveToFileNew() {
             ipcRenderer.send("select-file-save-translate-new")
@@ -152,17 +193,6 @@ export default defineComponent({
                 }
             })
         },
-        save(option: string) {
-            switch (option) {
-                case 'legacy': {
-                    this.saveToFileLegacy();
-                    break;
-                }
-                default: {
-                    this.saveToFileNew()
-                }
-            }
-        },
         show() {
             console.log(this.eventData);
         },
@@ -172,21 +202,43 @@ export default defineComponent({
                     this.eventData.data[dataKey].CharacterT = args[1]
             }
         },
-        dataChanged(args) {
-            console.log(this.eventData)
+        dataChanged() {
+            this.storeEventData()
+        },
+        storeEventData() {
+            const store = useTranslateTasksStore()
+            store.eventData = this.eventData
+            store.baseFile = this.loadedFile
+            store.loaded = this.loaded
+        },
+
+        clearEventData() {
+            this.loaded = false
+            this.loadedFile = ""
+            this.eventData = new StoryEventSet([]) as StoryEventSet
         }
     },
     watch: {
         loadedFile: function () {
-            if (this.loadedFile.length > 0) this.loaded = true;
-            if (this.loadedFile.endsWith("pjs.txt")) {
-                this.eventData = StoryEventSet.FromFile(this.loadedFile)
+            if (fs.existsSync(this.loadedFile)) {
+                this.loaded = this.loadedFile.length > 0;
+                if (this.loadedFile.endsWith("pjs.txt")) {
+                    this.eventData = StoryEventSet.FromFile(this.loadedFile)
+                } else {
+                    this.eventData = StoryEventSet.FromLegacy(GameStoryData.FromFile(this.loadedFile))
+                }
             } else {
-                let jsonData = GameStoryData.FromFile(this.loadedFile)
-                this.eventData = StoryEventSet.FromLegacy(jsonData)
+                this.clearEventData()
             }
+            this.storeEventData()
         },
-    }
+    },
+    unmounted() {
+        if (!this.loaded) {
+            this.clearEventData()
+        }
+        this.storeEventData()
+    },
 })
 </script>
 

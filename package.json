@@ -1,6 +1,6 @@
 {
   "name": "sekaisubtitle-electron",
-  "version": "0.9.9-rc.7",
+  "version": "0.9.9-rc.8",
   "main": "dist-electron/main/index.js",
   "description": "Sekai Subtitle",
   "author": "XBB <icexb_baka@163.com>",

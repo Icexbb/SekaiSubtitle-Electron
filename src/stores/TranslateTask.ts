@@ -1,9 +1,12 @@
 import {defineStore} from "pinia";
+import {StoryEventSet} from "../utils/data";
 
 
-export const useDownloadTasksStore = defineStore("DownloadTasks", {
+export const useTranslateTasksStore = defineStore("TranslateTasks", {
     state: () => ({
-        jsonData: {} as Object
+        eventData: new StoryEventSet([]) as StoryEventSet,
+        baseFile: "" as string,
+        loaded: false as boolean,
     }),
     actions: {}
 })
