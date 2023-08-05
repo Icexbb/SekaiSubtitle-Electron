@@ -93,17 +93,18 @@ export default defineComponent({
             this.rbOption = this.generatePopDown()
         },
         generatePopDown() {
-            let options = []
+            let options:object[] = []
             let brackets = ['【】', '「」', '『』', '（）', '‘’', '“”', '()']
 
             if (this.data.ContentT) {
                 brackets.forEach((value, index) => {
                     if (this.data.ContentT.includes(value[0]) || this.data.ContentT.includes(value[1])) {
-                        let subOptions = []
-                        for (const i in brackets) {
+                        let subOptions :object[]= []
+                        for (let i = 0; i < brackets.length; i++) {
                             if (i != index)
                                 subOptions.push({label: `${brackets[i]}`, key: `replace-${value}-${brackets[i]}`})
                         }
+
                         options.push({
                             label: `将${value}替换为...`,
                             key: `replace-${value}`,
@@ -113,7 +114,7 @@ export default defineComponent({
                 })
             }
 
-            let subOptions = []
+            let subOptions:object[] = []
             brackets.forEach((value) => {
                 subOptions.push({label: `${value}`, key: `add-${value}`})
             })
