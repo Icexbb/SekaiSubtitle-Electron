@@ -51,6 +51,7 @@
     "node-ffprobe": "^3.0.0",
     "semver": "^7.5.1",
     "socks-proxy-agent": "^8.0.1",
+    "typescipt": "^1.0.0",
     "vue-axios": "^3.5.2",
     "vue-router": "^4.1.6",
     "ws": "^8.13.0"

@@ -7,6 +7,7 @@ export const useTranslateTasksStore = defineStore("TranslateTasks", {
         eventData: new StoryEventSet([]) as StoryEventSet,
         baseFile: "" as string,
         loaded: false as boolean,
+        taskName:""as string,
     }),
     actions: {}
 })

@@ -57,7 +57,7 @@
         <template #default>
             <n-space v-if="!this.updating" vertical justify="center"
                 style="justify-content: center;align-items: center;display:flex;text-align: center;height: 100%;">
-                <img class="home-logo" src="../assets/icon.png" alt="Sekai Subtitle" disabled :draggable="false">
+                <img class="home-logo" src="../assets/icon.png" alt="Sekai Subtitle" :draggable="false">
                 <n-gradient-text disabled :gradient="this.titleGradient" font-size="32">
                     Sekai Subtitle
                 </n-gradient-text>
@@ -77,7 +77,7 @@
             <n-space v-else vertical justify="center"
                 style="justify-content: center;align-items: center;display:flex;text-align: center;height: 100%;">
                 <n-progress type="circle" :percentage="this.updateProgress" style="width: 150px;">
-                    <img class="home-logo" src="../assets/icon.png" alt="Sekai Subtitle" disabled :draggable="false">
+                    <img class="home-logo" src="../assets/icon.png" alt="Sekai Subtitle"  :draggable="false">
                 </n-progress>
                 <n-gradient-text :font-size="25">
                     {{ this.updateProgress.toFixed(1) }}%{{ "\t" }}{{ this.downloadRate }}
@@ -157,12 +157,9 @@ export default defineComponent({
                     this.latestAppVersion = args[1]
                     if (semver.gt(this.latestAppVersion, this.appVersion, true)) {
                         this.appNeedUpdate = true
-                         console.log(args)
-
                     }
                 } catch (e) {
                     this.appNeedUpdate = true
-                    console.log(e)
                 }
             })
 

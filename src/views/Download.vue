@@ -1,12 +1,9 @@
 <template>
-    <n-card style="height: 100%;user-select: none;" content-style="padding: 1em;height:100%;"
-            header-style="padding: 1em;"
-            :segmented="false" class="full-height">
-        <template #header>
-            <n-page-header class="header" title="数据下载"/>
-        </template>
-        <n-space vertical :wrap-item="false" style="height:100%" justify="space-between">
-            <n-space ertical :wrap-item="false" justify="start">
+    <n-scrollbar>
+        <n-space vertical justify="space-between">
+            <n-page-header class="header" title="数据下载" style="padding: 1em;user-select: none;"/>
+
+            <n-space ertical :wrap-item="false" justify="start" style="padding: 1em;user-select: none;">
                 <n-input-group>
                     <n-input-group-label>数据来源</n-input-group-label>
                     <n-select
@@ -57,7 +54,8 @@
                     </n-button>
                 </n-space>
             </n-space>
-            <n-card style="height: max-content;">
+
+            <n-card style="height: max-content;padding: 1em;user-select: none;">
                 <template #header>
                     <n-space>
                         <n-text>下载任务列表</n-text>
@@ -78,11 +76,13 @@
 
                 </template>
                 <template #default>
-                    <n-space>
-                        <template v-for="taskId in Object.keys(this.DownloadTasks)" :key="taskId">
-                            <DownloadRequest :hash="taskId" :ref="taskId"/>
-                        </template>
-                    </n-space>
+                    <n-scrollbar>
+                        <n-space>
+                            <template v-for="taskId in Object.keys(this.DownloadTasks)" :key="taskId">
+                                <DownloadRequest :hash="taskId" :ref="taskId"/>
+                            </template>
+                        </n-space>
+                    </n-scrollbar>
                 </template>
                 <template #action>
                     <n-space justify="end">
@@ -101,13 +101,13 @@
                             <span>{{ this.proxy }}</span>
                         </template>
                         <template #header>
-                            本机IP：{{this.currentIpv4}} {{this.currentIpv6}}
+                            本机IP：{{ this.currentIpv4 }} {{ this.currentIpv6 }}
                         </template>
                     </n-popover>
                 </template>
             </n-card>
         </n-space>
-    </n-card>
+    </n-scrollbar>
 </template>
 <script lang="ts">
 import {defineComponent, ref} from "vue";
@@ -115,7 +115,7 @@ import {createHash} from "crypto";
 import DownloadRequest from "../components/DownloadRequest.vue";
 import {ServerProxy} from "@vicons/carbon"
 import {AssetDir, download_list, update_tree} from "../utils/asset";
-import {useDownloadTasksStore, DownloadTaskInfo} from "../stores/DownloadTasks";
+import {DownloadTaskInfo, useDownloadTasksStore} from "../stores/DownloadTasks";
 import path from "path";
 import {ipcRenderer} from "electron";
 import {chara_id} from "../utils/constants";
@@ -127,12 +127,12 @@ const dataSourceOpt = [
 ]
 
 export default defineComponent({
-    components: {DownloadRequest, ServerProxy,QuestionCircle32Filled},
+    components: {DownloadRequest, ServerProxy, QuestionCircle32Filled},
     setup() {
         const store = useDownloadTasksStore();
         let DownloadTasks = ref({})
         store.$subscribe((mutation, state) => {
-            DownloadTasks.value = state.tasks
+            DownloadTasks.value = state['tasks']
         })
         DownloadTasks.value = store.$state.tasks
         return {
@@ -173,16 +173,16 @@ export default defineComponent({
         getIp() {
             this.axios.get("https://v4.ident.me").then(data => {
                 this.currentIpv4 = data.data
-            }).catch((reason) => {
+            }).catch(() => {
                 this.currentIpv4 = null
             })
             this.axios.get("https://v6.ident.me").then(data => {
                 this.currentIpv6 = data.data
-            }).catch((reason) => {
+            }).catch(() => {
                 this.currentIpv6 = null
             })
         },
-        updateProxy(){
+        updateProxy() {
             let proxy = ipcRenderer.sendSync("get-setting", "proxy")
             switch (proxy) {
                 case null:

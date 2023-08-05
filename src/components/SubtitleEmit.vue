@@ -521,7 +521,6 @@ export default defineComponent({
                     duration: duration,
                     debug: false,
                 }
-                console.table(ProcessConfig)
                 ipcRenderer.send("task-new", [JSON.stringify(ProcessConfig), this.runAfterCreate])
                 this.modalClose()
             }

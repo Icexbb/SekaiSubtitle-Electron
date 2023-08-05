@@ -62,7 +62,6 @@ export default defineComponent({
             useDownloadTasksStore().deleteTask(this.hash)
         },
         checkAndDownload() {
-            console.table(useDownloadTasksStore().tasks[this.hash])
             if ((!this.downloaded) && (!this.downloading)) this.download();
         },
         updateStatus() {

@@ -1,28 +1,30 @@
 <template>
-    <n-layout has-sider class="app full-height">
-        <n-layout-sider
-                bordered
-                collapse-mode="width"
-                :collapsed-width="64"
-                :width="240"
-                :collapsed="collapsed"
-                :show-trigger="false"
-                @collapse="collapsed = true"
-                @expand="collapsed = false"
-        >
-            <n-menu
-                    :collapsed="collapsed"
+    <n-message-provider>
+        <n-layout has-sider class="app full-height">
+            <n-layout-sider
+                    bordered
+                    collapse-mode="width"
                     :collapsed-width="64"
-                    :collapsed-icon-size="22"
-                    :options="menuOptions"
-            />
-        </n-layout-sider>
-        <n-layout-content>
-            <router-view v-slot="{ Component }">
-                <component :is="Component"/>
-            </router-view>
-        </n-layout-content>
-    </n-layout>
+                    :width="240"
+                    :collapsed="collapsed"
+                    :show-trigger="false"
+                    @collapse="collapsed = true"
+                    @expand="collapsed = false"
+            >
+                <n-menu
+                        :collapsed="collapsed"
+                        :collapsed-width="64"
+                        :collapsed-icon-size="22"
+                        :options="menuOptions"
+                />
+            </n-layout-sider>
+            <n-layout-content>
+                <router-view v-slot="{ Component }">
+                    <component :is="Component"/>
+                </router-view>
+            </n-layout-content>
+        </n-layout>
+    </n-message-provider>
 </template>
 <script lang="ts">
 import {defineComponent, h, ref} from "vue";
