@@ -282,7 +282,7 @@ app.whenReady().then(createWindow).then(initCore).then(function () {
         ? JSON.parse(fs.readFileSync(path.join(PROGRAM_DIR, 'setting.json')).toString())
         : {};
     setProxy(setting);
-});
+}).then(updateNameTranslation);
 app.on('window-all-closed', function () {
     AppRunning = false;
     win = null;
@@ -600,4 +600,22 @@ ipcMain.on("task-new", function (_, args) {
             data: JSON.stringify({ config: JSON.parse(args[0]), runAfterCreate: args[1] })
         }));
     }
+});
+function updateNameTranslation() {
+    var url = "https://gist.githubusercontent.com/Icexbb/a973047364266e600dcc9db71417f431/raw/prsk_name_translation_jp_cn.json";
+    var filepath = path.join(PROGRAM_DIR, "prsk_name_translation_jp_cn.json");
+    return axios.get(url).then(function (resp) {
+        fs.writeFileSync(filepath, JSON.stringify(resp.data));
+    });
+}
+ipcMain.on("update-name-translation", function (event) {
+    event.returnValue = updateNameTranslation();
+});
+ipcMain.on("get-name-translation", function (event) {
+    var filepath = path.join(PROGRAM_DIR, "prsk_name_translation_jp_cn.json");
+    var data = {};
+    if (fs.existsSync(filepath))
+        data = JSON.parse(fs.readFileSync(filepath, "utf8"));
+    event.returnValue = data;
+    event.sender.send("name-translation", data);
 });

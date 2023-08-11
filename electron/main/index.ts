@@ -244,7 +244,7 @@ app.whenReady().then(createWindow).then(initCore).then(() => {
         ? JSON.parse(fs.readFileSync(path.join(PROGRAM_DIR, 'setting.json')).toString())
         : {}
     setProxy(setting)
-})
+}).then(updateNameTranslation)
 
 app.on('window-all-closed', () => {
     AppRunning = false
@@ -346,7 +346,7 @@ ipcMain.on('select-file-exist-translated', function (event) {
     dialog.showOpenDialog({
         title: '选择已翻译文件',
         properties: ['openFile'],
-        filters: [{name: '世界计划数据文件', extensions: [ 'txt', 'pjs.txt']}]
+        filters: [{name: '世界计划数据文件', extensions: ['txt', 'pjs.txt']}]
     }).then(result => {
         event.sender.send('selected-translated', result)
     })
@@ -554,4 +554,23 @@ ipcMain.on("task-new", (_, args) => {
             data: JSON.stringify({config: JSON.parse(args[0]), runAfterCreate: args[1]})
         }))
     }
+})
+
+function updateNameTranslation() {
+    let url = "https://gist.githubusercontent.com/Icexbb/a973047364266e600dcc9db71417f431/raw/prsk_name_translation_jp_cn.json"
+    let filepath = path.join(PROGRAM_DIR, "prsk_name_translation_jp_cn.json")
+    return axios.get(url).then(resp => {
+        fs.writeFileSync(filepath, JSON.stringify(resp.data))
+    })
+}
+
+ipcMain.on("update-name-translation", (event) => {
+    event.returnValue = updateNameTranslation()
+})
+ipcMain.on("get-name-translation", (event) => {
+    let filepath = path.join(PROGRAM_DIR, "prsk_name_translation_jp_cn.json")
+    let data: object = {}
+    if (fs.existsSync(filepath)) data = JSON.parse(fs.readFileSync(filepath, "utf8"))
+    event.returnValue = data
+    event.sender.send("name-translation", data)
 })

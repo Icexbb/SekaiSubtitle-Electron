@@ -15,9 +15,7 @@
                                     </n-button>
                                 </template>
                             </n-popover>
-                            <n-popconfirm
-                                    positive-text="是" negative-text="否"
-                                    @positive-click="this.selectJson">
+                            <n-popconfirm negative-text="否" positive-text="是" @positive-click="this.selectJson">
                                 <template #trigger>
                                     <n-button> 打开新文件</n-button>
                                 </template>
@@ -25,9 +23,7 @@
                                     <n-text>确认关闭？ 未保存的更改将被舍弃！</n-text>
                                 </template>
                             </n-popconfirm>
-                            <n-popconfirm
-                                    positive-text="是" negative-text="否"
-                                    @positive-click="this.clearEventData">
+                            <n-popconfirm negative-text="否" positive-text="是" @positive-click="this.clearEventData">
                                 <template #trigger>
                                     <n-button> 关闭文件</n-button>
                                 </template>
@@ -42,8 +38,7 @@
                             <n-gi :span="2">
                                 <n-statistic label="任务名称">
                                     <n-input style="width: 80%;" v-model:value="this.taskName" placeholder=""
-                                             @update:value="this.dataChanged"
-                                    />
+                                             @update:value="this.dataChanged"/>
                                 </n-statistic>
                             </n-gi>
                             <n-gi :span="1">
@@ -67,14 +62,11 @@
                         </n-grid>
                     </template>
                 </n-page-header>
-                <n-space :item-style="{width:'90%'}" justify="center">
-                    <template v-for="(data,index) in this.eventData.data " :key="index">
-                        <TranslateCard
-                                :translated="this.eventData.data.length==this.translated.data.length?
-                                            this.translated.data[index].ContentT:''"
-                                @translation-changed="this.dataChanged" :data="data"
-                                @character-translated="this.characterTranslated"
-                        />
+                <n-space :item-style="{ width: '90%' }" justify="center">
+                    <template v-for="(data, index) in this.eventData.data " :key="index">
+                        <TranslateCard :data="data" :translated="this.eventData.data.length == this.translated.data.length ?
+                            this.translated.data[index].ContentT : ''"
+                                       @translation-changed="this.dataChanged" @character-translated="this.characterTranslated"/>
                     </template>
                 </n-space>
             </n-space>
@@ -137,9 +129,13 @@ export default defineComponent({
 
         const store = useTranslateTasksStore()
         let eventData: StoryEventSet = store.eventData
+        eventData = this.autoFillCharaTranslation(eventData)
         let taskName: string = store.taskName
         let loadedFile: string = store.baseFile
         let loaded: boolean = store.loaded
+        if (loaded) {
+
+        }
         return {
             bracketsOptions,
             saveOptions,
@@ -249,7 +245,40 @@ export default defineComponent({
             this.loaded = false
             this.loadedFile = ""
             this.eventData = new StoryEventSet([]) as StoryEventSet
-        }
+        },
+        autoFillCharaTranslation(eventData?: StoryEventSet) {
+            const chart = ipcRenderer.sendSync("get-name-translation")
+            if (eventData == undefined) {
+                if (this.loaded && this.eventData) {
+                    for (let i = 0; i < this.eventData.data.length; i++) {
+                        let chara: string = this.eventData.data[i].CharacterO
+                        if (chart.hasOwnProperty(chara) && chart[chara].length != 0 && this.eventData.data[i].CharacterT.length == 0) {
+                            this.eventData.data[i].CharacterT = chart[chara]
+                        }
+                    }
+                }
+            } else {
+                let e = eventData
+                for (let i = 0; i < e.data.length; i++) {
+                    let chara: string = e.data[i].CharacterO
+                    if (chart.hasOwnProperty(chara) && chart[chara].length != 0 && e.data[i].CharacterT.length == 0) {
+                        e.data[i].CharacterT = chart[chara]
+                    }
+                }
+                return e
+            }
+        },
+        updateCharaTranalation() {
+            ipcRenderer.sendSync("update-name-translation")
+            let chart = ipcRenderer.sendSync("get-name-translation")
+            for (let i = 0; i < this.eventData.data.length; i++) {
+                let chara: string = this.eventData.data[i].CharacterO
+                if (chart[chara] == undefined || chart[chara] == "" && this.eventData.data[i].CharacterT) {
+                    chart[chara] = this.eventData.data[i].CharacterT
+                }
+            }
+            // TODO
+        },
     },
     watch: {
         loadedFile: function () {
@@ -262,6 +291,7 @@ export default defineComponent({
                     this.taskName = path.basename(this.loadedFile, path.extname(this.loadedFile))
                     this.eventData = StoryEventSet.FromLegacy(GameStoryData.FromFile(this.loadedFile))
                 }
+                this.autoFillCharaTranslation()
             } else {
                 this.clearEventData()
             }
@@ -277,6 +307,4 @@ export default defineComponent({
 })
 </script>
 
-<style scoped>
-
-</style>
+<style scoped></style>
