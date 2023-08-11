@@ -1,7 +1,7 @@
 import path from "path";
 import * as fs from 'fs';
-import { area_name, chara_name, unit_name } from "./constants";
-import { ipcRenderer } from "electron";
+import {area_name, chara_name, unit_name} from "./constants";
+import {ipcRenderer} from "electron";
 
 interface SourceList {
     events: string
@@ -178,7 +178,7 @@ function update_tree(source: string) {
             let scenario_id: string = ep['scenarioId']
             let chara_string: string[] = ep['characterIds'].map(cid => chara_name[character2ds[cid]['characterId']]).filter(x => x != null)
             let chara: string = chara_string.join(',')
-            let as_id;
+            let as_id: string;
             if (ep["actionSetType"] == "normal") {
                 as_count += 1
                 as_id = `${String(as_count).padStart(4, '0')} - ${chara} - id${ep['id']}`
@@ -199,7 +199,7 @@ function update_tree(source: string) {
             if (scenario_id.includes('ev')) {
                 let release_event_id = ep['releaseConditionId']
                 if (release_event_id > 100000) {
-                    release_event_id = parseInt(String((release_event_id % 10000) / 100)) + 1
+                    release_event_id = parseInt(String((release_event_id % 100000) / 100)) + 1
                 }
                 let unit = unit_name[scenario_id.split("_")[2]]
                 let key = (events[release_event_id] != null)
@@ -208,7 +208,6 @@ function update_tree(source: string) {
                 let d = tree['地图对话 - 活动追加'][key] == null ? {} : tree['地图对话 - 活动追加'][key]
                 d[as_id] = url
                 tree['地图对话 - 活动追加'][key] = d
-
             }
 
             {

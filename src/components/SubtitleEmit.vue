@@ -653,7 +653,7 @@ export default defineComponent({
                 const file = event.dataTransfer.files[fileIndex];
                 (['.json']).forEach(ext => {
                     if (file['name'].endsWith(ext)) {
-                        this.loadStaffItem(JSON.parse(require('fs').readFileSync(file['path'])))
+                        this.loadStaffItem(JSON.parse(String(fs.readFileSync(file['path']))))
                     }
                 });
             });
