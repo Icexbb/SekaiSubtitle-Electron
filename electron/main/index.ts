@@ -532,8 +532,10 @@ ipcMain.on("write-new-core", (_, args) => {
         appLog(e)
     }
     fs.writeFileSync(CORE_PATH, args);
-    if (app.isPackaged) app.relaunch();
-    app.exit();
+    if (app.isPackaged) {
+        app.relaunch();
+        app.exit(0);
+    }
 })
 ipcMain.on("get-task-log", (event, args) => {
     event.returnValue = CoreTaskLogs[args]

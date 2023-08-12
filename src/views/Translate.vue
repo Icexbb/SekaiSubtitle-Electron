@@ -268,7 +268,7 @@ export default defineComponent({
                 return e
             }
         },
-        updateCharaTranalation() {
+        updateCharaTranslation() {
             ipcRenderer.sendSync("update-name-translation")
             let chart = ipcRenderer.sendSync("get-name-translation")
             for (let i = 0; i < this.eventData.data.length; i++) {
