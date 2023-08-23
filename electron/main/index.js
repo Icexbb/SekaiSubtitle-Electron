@@ -52,6 +52,7 @@ import * as fs from 'fs';
 import getPort from "./port";
 import axios from "axios";
 import WebSocket from 'ws';
+import sudo from "@kerin/sudo-prompt";
 // The built directory structure
 //
 // ├─┬ dist-electron
@@ -385,13 +386,6 @@ ipcMain.on('select-file-exist-translated', function (event) {
         event.sender.send('selected-translated', result);
     });
 });
-ipcMain.on('get-system-font', function (event) {
-    var fontList = require('font-list');
-    fontList.getFonts()
-        .then(function (fonts) {
-        event.sender.send("system-font", fonts);
-    });
-});
 ipcMain.on('read-file-json', function (event) {
     dialog.showOpenDialog({
         title: '选择文件',
@@ -567,21 +561,30 @@ ipcMain.on("stop-core", function (event) {
     event.returnValue = CoreProcess == null;
 });
 ipcMain.on("write-new-core", function (_, args) {
-    try {
-        if (CoreWebSocket != null)
-            CoreWebSocket.close();
-        if (CoreProcess != null)
-            CoreProcess.kill();
-        CoreProcess = null;
-    }
-    catch (e) {
-        appLog(e);
-    }
-    fs.writeFileSync(CORE_PATH, args);
-    if (app.isPackaged) {
-        app.relaunch();
-        app.exit(0);
-    }
+    var tmpPath = path.join(app.getPath('temp'), 'core.exe').replace('/', '\\');
+    var dirPath = path.dirname(CORE_PATH).replace('/', '\\');
+    if (fs.existsSync(tmpPath))
+        fs.unlinkSync(tmpPath);
+    fs.writeFile(tmpPath, args, null, function () {
+        try {
+            if (CoreWebSocket != null)
+                CoreWebSocket.close();
+            if (CoreProcess != null)
+                CoreProcess.kill();
+            CoreProcess = null;
+        }
+        catch (e) {
+            appLog(e);
+        }
+        finally {
+            sudo.exec("del \"".concat(CORE_PATH, "\" /f && xcopy \"").concat(tmpPath, "\" \"").concat(dirPath, "\" /Y && del \"").concat(tmpPath, "\" /f"), { name: 'Sekai Subtitle' }, function () {
+                if (app.isPackaged) {
+                    app.relaunch();
+                    app.exit(0);
+                }
+            });
+        }
+    });
 });
 ipcMain.on("get-task-log", function (event, args) {
     event.returnValue = CoreTaskLogs[args];
@@ -603,10 +606,20 @@ ipcMain.on("task-new", function (_, args) {
     }
 });
 function updateNameTranslation() {
-    var url = "https://gist.githubusercontent.com/Icexbb/a973047364266e600dcc9db71417f431/raw/prsk_name_translation_jp_cn.json";
-    var filepath = path.join(PROGRAM_DIR, "prsk_name_translation_jp_cn.json");
-    return axios.get(url).then(function (resp) {
-        fs.writeFileSync(filepath, JSON.stringify(resp.data));
+    return __awaiter(this, void 0, void 0, function () {
+        var url, filepath, resp;
+        return __generator(this, function (_a) {
+            switch (_a.label) {
+                case 0:
+                    url = "https://gist.githubusercontent.com/Icexbb/a973047364266e600dcc9db71417f431/raw/prsk_name_translation_jp_cn.json";
+                    filepath = path.join(PROGRAM_DIR, "prsk_name_translation_jp_cn.json");
+                    return [4 /*yield*/, axios.get(url)];
+                case 1:
+                    resp = _a.sent();
+                    fs.writeFileSync(filepath, JSON.stringify(resp.data));
+                    return [2 /*return*/];
+            }
+        });
     });
 }
 ipcMain.on("update-name-translation", function (event) {

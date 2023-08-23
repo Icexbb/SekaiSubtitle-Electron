@@ -8,6 +8,7 @@ import getPort from "./port"
 
 import axios from "axios";
 import WebSocket from 'ws';
+import sudo from "@kerin/sudo-prompt"
 // The built directory structure
 //
 // ├─┬ dist-electron
@@ -352,13 +353,6 @@ ipcMain.on('select-file-exist-translated', function (event) {
     })
 });
 
-ipcMain.on('get-system-font', function (event) {
-    let fontList = require('font-list')
-    fontList.getFonts()
-        .then(fonts => {
-            event.sender.send("system-font", fonts)
-        })
-});
 ipcMain.on('read-file-json', function (event) {
     dialog.showOpenDialog({
         title: '选择文件',
@@ -523,19 +517,31 @@ ipcMain.on("stop-core", (event) => {
     event.sender.send("stop-core-result", CoreConnected)
     event.returnValue = CoreProcess == null
 })
+
 ipcMain.on("write-new-core", (_, args) => {
-    try {
-        if (CoreWebSocket != null) CoreWebSocket.close()
-        if (CoreProcess != null) CoreProcess.kill()
-        CoreProcess = null;
-    } catch (e) {
-        appLog(e)
-    }
-    fs.writeFileSync(CORE_PATH, args);
-    if (app.isPackaged) {
-        app.relaunch();
-        app.exit(0);
-    }
+    let tmpPath = path.join(app.getPath('temp'), 'core.exe').replace('/', '\\')
+    let dirPath = path.dirname(CORE_PATH).replace('/', '\\')
+    if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+    fs.writeFile(tmpPath, args, null, () => {
+        try {
+            if (CoreWebSocket != null) CoreWebSocket.close()
+            if (CoreProcess != null) CoreProcess.kill()
+            CoreProcess = null;
+        } catch (e) {
+            appLog(e)
+        } finally {
+            sudo.exec(
+                `del "${CORE_PATH}" /f && xcopy "${tmpPath}" "${dirPath}" /Y && del "${tmpPath}" /f`,
+                {name: 'Sekai Subtitle'},
+                () => {
+                    if (app.isPackaged) {
+                        app.relaunch();
+                        app.exit(0);
+                    }
+                }
+            );
+        }
+    });
 })
 ipcMain.on("get-task-log", (event, args) => {
     event.returnValue = CoreTaskLogs[args]
@@ -558,12 +564,11 @@ ipcMain.on("task-new", (_, args) => {
     }
 })
 
-function updateNameTranslation() {
+async function updateNameTranslation() {
     let url = "https://gist.githubusercontent.com/Icexbb/a973047364266e600dcc9db71417f431/raw/prsk_name_translation_jp_cn.json"
     let filepath = path.join(PROGRAM_DIR, "prsk_name_translation_jp_cn.json")
-    return axios.get(url).then(resp => {
-        fs.writeFileSync(filepath, JSON.stringify(resp.data))
-    })
+    const resp = await axios.get(url);
+    fs.writeFileSync(filepath, JSON.stringify(resp.data));
 }
 
 ipcMain.on("update-name-translation", (event) => {
