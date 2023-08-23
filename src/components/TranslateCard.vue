@@ -35,13 +35,26 @@
                                      :autosize="{maxRows:rowCount, minRows:rowCount}"
                                      readonly :autofocus="false">
                             </n-input>
-                            <n-input type="textarea" v-model:value="this.data.ContentT"
-                                     :autosize="{maxRows:rowCount, minRows:rowCount}"
-                                     :allow-input="(value)=>value.split('\n').length<=this.data.ContentO.split('\\N').length"
-                                     :status="!this.data.ContentT?'error':(this.data.ContentT.split('\n').length==rowCount?'success':'warning')"
-                                     @update:value="this.tChanged" @contextmenu="this.handleContextMenu"
-                                     show-count clearable placeholder=""
-                            />
+                            <n-popover :show="this.focusing&&!!this.checkRes" placement="top-end" scrollable
+                                       trigger="manual">
+                                <template #trigger>
+                                    <n-input v-model:value="this.data.ContentT" :allow-input="(value)=>value.split('\n').length<=this.data.ContentO.split('\\N').length"
+                                             :autosize="{maxRows:rowCount, minRows:rowCount}"
+                                             :status="this.translationStatus"
+                                             clearable
+                                             placeholder="" show-count
+                                             type="textarea" @contextmenu="this.handleContextMenu" @focusin="()=>{this.tCheck();this.focusing=true}"
+                                             @focusout="()=>{this.focusing=false}"
+                                             @update:value="this.tChanged"
+                                    />
+                                </template>
+                                <template v-for="line in this.checkRes.split('\n')" :key="line">
+                                    <n-text>{{ line }}</n-text>
+                                    <br>
+                                </template>
+                            </n-popover>
+
+
                             <n-dropdown
                                     placement="bottom-start"
                                     trigger="manual"
@@ -65,22 +78,23 @@
     </n-card>
 </template>
 <script lang="ts">
-import {defineComponent, nextTick, ref} from "vue";
+import {defineComponent, nextTick} from "vue";
 import {StoryEvent} from "../utils/data"
 
 export default defineComponent({
     props: {"data": StoryEvent, "translated": String},
     emits: ['characterTranslated', "translationChanged"],
     data() {
-        const showDropdownRef = ref(false)
-        const xRef = ref(0)
-        const yRef = ref(0)
         return {
-            showDropdown: showDropdownRef,
-            x: xRef,
-            y: yRef,
+            showDropdown: false,
+            showCheckPop: false,
+            focusing: false,
+            x: 0,
+            y: 0,
             rowCount: this.data ? this.data.ContentO.split('\\N').length : 0,
             rbOption: this.generatePopDown(),
+            translationStatus: this.getInputStatus(),
+            checkRes: this.checkText()
         }
     },
     methods: {
@@ -88,18 +102,31 @@ export default defineComponent({
             this.$emit("characterTranslated", [this.data.CharacterO, value])
             this.$emit("translationChanged")
         },
+        getInputStatus(text?: string) {
+            if (!this.data?.ContentT || text)
+                return 'error'
+            else if ((this.data.ContentT.split('\n').length == this.rowCount))
+                return 'success'
+            else
+                return 'warning'
+        },
+        tCheck() {
+            this.checkRes = this.checkText()
+            this.translationStatus = this.getInputStatus(this.checkRes)
+        },
         tChanged() {
             this.$emit("translationChanged")
             this.rbOption = this.generatePopDown()
+            this.tCheck()
         },
         generatePopDown() {
-            let options:object[] = []
+            let options: object[] = []
             let brackets = ['【】', '「」', '『』', '（）', '‘’', '“”', '()']
 
             if (this.data.ContentT) {
                 brackets.forEach((value, index) => {
                     if (this.data.ContentT.includes(value[0]) || this.data.ContentT.includes(value[1])) {
-                        let subOptions :object[]= []
+                        let subOptions: object[] = []
                         for (let i = 0; i < brackets.length; i++) {
                             if (i != index)
                                 subOptions.push({label: `${brackets[i]}`, key: `replace-${value}-${brackets[i]}`})
@@ -114,7 +141,7 @@ export default defineComponent({
                 })
             }
 
-            let subOptions:object[] = []
+            let subOptions: object[] = []
             brackets.forEach((value) => {
                 subOptions.push({label: `${value}`, key: `add-${value}`})
             })
@@ -147,6 +174,64 @@ export default defineComponent({
         },
         onClickOutside() {
             this.showDropdown = false
+        },
+        checkText() {
+            if (this.data?.Type != "Dialog") return ""
+            let text: string = this.data.ContentT
+            if (!text) return ""
+            const replace = [['…', '...'], ['(', '（'], [')', '）'], [',', '，'], ['?', '？'], ['!', '！'], ['欸', '诶']]
+            replace.forEach(value => {
+                text = text.replaceAll(value[0], value[1])
+            })
+
+            let result: string[] = []
+            let lines = text.split("\n")
+            if (lines.indexOf("") != -1) result.push("存在空行")
+            if (lines.length != this.rowCount) result.push("行数与原文不符")
+
+            const normalEnd = ['、', '，', '。', '？', '！', '~', '♪', '☆', '—']
+            const unusualEnd = ['）', '」', '』', '”']
+
+            let checks = [false, false, false]
+            for (let i = 0; i < lines.length; i++) {
+                let line = lines[i]
+                if (!line) continue
+                if (!checks[0]) {
+                    if (normalEnd.indexOf(line[line.length - 1]) != -1) {
+                        if (line.includes("...，") || line.includes("...。")) {
+                            checks[0] = true
+                            result.push("省略号后无需标点")
+                        }
+                    } else if (unusualEnd.indexOf(line[line.length - 1]) != -1) {
+                        if (line.length > 1 && normalEnd.indexOf(line[line.length - 2]) != -1) {
+                            checks[0] = true
+                            result.push("句尾缺少标点")
+                        }
+                    } else {
+                        if (line.endsWith('...')) {
+
+                        } else {
+                            checks[0] = true
+                            result.push("句尾缺少标点")
+                        }
+                    }
+                }
+                if (!checks[1]) {
+                    if (line.includes("—")) {
+                        if ((line.split("—").length) != (line.split("——").length * 2 - 1))
+                            checks[1] = true
+                        result.push("破折号用双破折——或删除")
+                    }
+                }
+                if (!checks[2]) {
+                    if (line.replace('...', '…').length >= 30) {
+                        checks[2] = true
+                        result.push("单行过长，请删减或换行")
+                    }
+                }
+            }
+            this.data.ContentT = text
+            return result ? result.join("\n") : ""
         }
     }
 })
