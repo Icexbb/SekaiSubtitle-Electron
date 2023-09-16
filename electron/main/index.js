@@ -428,6 +428,23 @@ ipcMain.on('select-file-save-translate-legacy', function (event) {
         event.sender.send('selected-translate-path-legacy', result);
     });
 });
+function defaultSetting() {
+    return {
+        ProxyScheme: 'none',
+        ProxyHost: "127.0.0.1",
+        ProxyPort: 1080,
+        proxy: null,
+        SubtitleAlwaysOverwrite: true,
+        SubtitleRunAfterCreate: false,
+        SubtitleTyperFade: 50,
+        SubtitleTyperInterval: 80,
+        SubtitleCustomFontSettable: false
+    };
+}
+ipcMain.on("default-setting", function (event) {
+    event.returnValue = defaultSetting();
+    event.sender.send('default-setting', defaultSetting());
+});
 ipcMain.on('save-setting', function (_, args) {
     if (!fs.existsSync(PROGRAM_DIR))
         fs.mkdirSync(PROGRAM_DIR);
@@ -442,7 +459,15 @@ ipcMain.on('save-setting', function (_, args) {
 ipcMain.on('get-setting', function (event, args) {
     var setting = fs.existsSync(path.join(PROGRAM_DIR, 'setting.json'))
         ? JSON.parse(fs.readFileSync(path.join(PROGRAM_DIR, 'setting.json')).toString())
-        : {};
+        : function () {
+            var defaults = defaultSetting();
+            if (!fs.existsSync(PROGRAM_DIR))
+                fs.mkdirSync(PROGRAM_DIR);
+            if (fs.existsSync(PROGRAM_DIR)) {
+                fs.writeFileSync(path.join(PROGRAM_DIR, 'setting.json'), JSON.stringify(defaults));
+            }
+            return defaults;
+        };
     var result;
     if ((typeof args) === 'string') {
         result = setting[args];

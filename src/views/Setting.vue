@@ -68,7 +68,7 @@
                                             @wheel="(e)=>{
                                                 this.settingSubtitleTyperFade=Math.min(Math.max(0,this.settingSubtitleTyperFade+Math.sign(e.deltaY)*10),this.settingSubtitleTyperInterval)}"
                                             :step="10" :min="0" :max="this.settingSubtitleTyperInterval">
-                                        <template #prefix><span style="color: gray">渐变时间</span></template>
+                                      <template #prefix><span style="color: rgb(128,128,128)">渐变时间</span></template>
                                         <template #suffix>ms</template>
                                     </n-input-number>
                                     <n-input-number
@@ -77,7 +77,7 @@
                                                 this.settingSubtitleTyperInterval=Math.max(this.settingSubtitleTyperFade,this.settingSubtitleTyperInterval+Math.sign(e.deltaY)*10);}"
                                             v-model:value="this.settingSubtitleTyperInterval"
                                             :step="10" :min="this.settingSubtitleTyperFade">
-                                        <template #prefix><span style="color: gray">字符间隔</span></template>
+                                      <template #prefix><span style="color: rgb(128,128,128)">字符间隔</span></template>
                                         <template #suffix>ms</template>
                                     </n-input-number>
                                 </n-space>
@@ -116,7 +116,7 @@ export default defineComponent({
     },
     data() {
         return {
-            settingProxyScheme: '',
+          settingProxyScheme: 'none',
             settingProxyHost: '127.0.0.1',
             settingProxyPort: 1080,
             settingSubtitleRunAfterCreate: false,
